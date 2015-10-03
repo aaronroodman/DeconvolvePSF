@@ -4,10 +4,23 @@
 #
 import numpy as np
 import numpy.ma as ma
-from WavefrontPSF.stamp_collector import stamp_collector
-from WavefrontPSF.psf_evaluator import Moment_Evaluator
+from scipy.stats import tstd
+from matplotlib.colors import LogNorm
 from matplotlib import pyplot as plt
 plt.interactive(True)
+
+from WavefrontPSF.stamp_collector import stamp_collector
+from WavefrontPSF.psf_evaluator import Moment_Evaluator
+from DeconvolvePSF.lucy import deconvolve, convolve, makeMask, makeGaussian
+
+
+
+class Formatter(object):
+    def __init__(self, im):
+        self.im = im
+    def __call__(self, x, y):
+        z = self.im.get_array()[int(y), int(x)]
+        return 'x={:.01f}, y={:.01f}, z={:.04f}'.format(x, y, z)
 
 
 expid = 181243
@@ -39,9 +52,58 @@ Mxx = moments_decam['Mxx'] - moments_model['Mxx']
 Myy = moments_decam['Myy'] - moments_model['Myy']
 Mxy = moments_decam['Mxy'] - moments_model['Mxy']
 
+# find background level from RMS of decam_stamps data
+
 # now try deconvolving...
-# move RL code into GitHub
-# setup on ki-ls
+stdback = tstd(decam_stamps_clean.flatten(),limits=(-200,200))
+background = stdback*stdback
+
+#for i in range(decam_stamps_crop.shape[0]):
+
+for i in range(10):
+
+    psi0 = makeGaussian((32,32),Mxx[i],Myy[i],Mxy[i])
+    
+    # now try R-L
+    deconImage,diffs,psiByIter,chi2ByIter = deconvolve(model_stamps[i],decam_stamps_crop[i],psi_0=psi0,mask=None,mu0=background,convergence=0.5e-3,chi2Level=1024.,niterations=1000,extra=True)
+
+    # convolve back
+    predictImage = convolve(model_stamps[i],deconImage)
+
+    f1,axArr = plt.subplots(3,2)
+    im00 = axArr[0,0].imshow(decam_stamps_crop[i]/np.sum(decam_stamps_crop[i]),interpolation='none',origin='lower',cmap='hot')
+    ##,norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+    #axArr[0,0].colorbar(im00)
+    axArr[0,0].format_coord = Formatter(im00)
+    im01 = axArr[0,1].imshow(model_stamps[i]/np.sum(model_stamps[i]),interpolation='none',origin='lower',cmap='hot')
+    ##norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+    #axArr[0,1].colorbar(im01)
+    axArr[0,1].format_coord = Formatter(im01)
+    
+    im10 = axArr[1,0].imshow(psi0,interpolation='none',origin='lower',cmap='hot',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+    #axArr[1,0].colorbar(im10)
+    axArr[1,0].format_coord = Formatter(im10)
+    im11 = axArr[1,1].imshow(deconImage,interpolation='none',origin='lower',cmap='hot',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+    #axArr[1,1].colorbar(im11)
+    axArr[1,1].format_coord = Formatter(im11)    
+
+    im20 = axArr[2,0].imshow(predictImage,interpolation='none',origin='lower',cmap='hot')
+    ##,norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+    #axArr[2,0].colorbar(im20)
+    axArr[2,0].format_coord = Formatter(im20)
+    im21 = axArr[2,1].imshow(decam_stamps_crop[i]/np.sum(decam_stamps_crop[i])-predictImage,interpolation='none',origin='lower',cmap='hot',vmin=-0.01, vmax=0.01)
+    #axArr[2,1].colorbar(im21)
+    axArr[2,1].format_coord = Formatter(im21)    
+
+    f1.show()
+
+    print "flux_adaptive,snr from sextractor",psf_df['FLUX_ADAPTIVE'].ilog[i],psf_df['SNR_WIN'].iloc[i]
+    print "n iterations",len(diffs)
+    print "starting Diff,Chi2", diffs[0],chi2ByIter[0]
+    print "ending Diff,Chi2", diffs[-1],chi2ByIter[-1]
+
+
+    
 
 # list of expid analyzed
 from glob import glob
