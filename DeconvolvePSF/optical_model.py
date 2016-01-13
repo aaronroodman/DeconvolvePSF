@@ -199,6 +199,7 @@ def getOpticalPSF(expid, aos=False):
     WF.data['rzero'] = misalignment['rzero']
 
     #optPsfStamps are stamps of the optical psf. The dataModel is uh, the data. Leaving model in for posterity.
+    #dataModle is a pandas dataframe
     optPsfStamps, dataModel = WF.draw_psf(WF.data, misalignment=misalignment)
     return optPsfStamps, dataModel
 
@@ -250,5 +251,8 @@ from sys import argv
 expid = int(argv[1])
 psf, model = getOpticalPSF(expid)
 
-print(psf.shape)
-print(model)
+from matplotlib import pyplot as plt
+for i in xrange(9):
+    plt.subplot(3,3,i+1)
+    plt.imshow(psf[i,:,:])
+plt.show() 
