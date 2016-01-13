@@ -133,10 +133,9 @@ def getOpticalPSF(expid, aos=False):
     # note that you CAN load them up by passing "do_exclude=True", which then
     # returns a second variable containing the vignets and aperture fluxes and
     # errors
-    model, full_data = digestor.digest_directory(
+    model = digestor.digest_directory(
                 data_directory,
-                file_type='_selpsfcat.fits',
-                do_exclude = True)
+                file_type='_selpsfcat.fits')
     # cut the old data appropriately
     model = model[(model['SNR_WIN'] > 90) &
                   (model['SNR_WIN'] < 400)]
@@ -202,7 +201,8 @@ def getOpticalPSF(expid, aos=False):
     #optPsfStamps are stamps of the optical psf. The dataModel is uh, the data. Leaving model in for posterity.
     #dataModle is a pandas dataframe
     optPsfStamps, dataModel = WF.draw_psf(WF.data, misalignment=misalignment)
-    return optPsfStamps, full_data['VIGNET']
+    return optPsfStamps, #dataModel
+    #I don't think I need the dataModel at all
 
     #Not sure what this part does, but don't think it's relevant.
 
@@ -248,9 +248,17 @@ def getOpticalPSF(expid, aos=False):
     #     WF.field[row + '_residual'] = WF_data.field[row] - WF.field[row]
     #     field_model[row + '_residual'] = field_data[row] - field_model[row]
 
-if _name__ == '__main__':
+if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, model = getOpticalPSF(expid)
+    psf, vignette = getOpticalPSF(expid)
+    print(psf.shape)
+    print(vignette.shape)
+    from matplotlib import pyplot as plt
+    plt.subplot(1,2,1)
+    plt.imshow(psf[0,:, :])
+    plt.subplot(1,2,2)
+    plt.imshow(vignette[0, :, :])
+    plt.show()
 
