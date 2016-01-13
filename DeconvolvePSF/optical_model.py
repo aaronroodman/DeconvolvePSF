@@ -251,8 +251,3 @@ from sys import argv
 expid = int(argv[1])
 psf, model = getOpticalPSF(expid)
 
-from matplotlib import pyplot as plt
-for i in xrange(9):
-    plt.subplot(3,3,i+1)
-    plt.imshow(psf[i,:,:])
-plt.show() 
