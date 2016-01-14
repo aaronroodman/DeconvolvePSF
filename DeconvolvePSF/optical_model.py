@@ -138,12 +138,14 @@ def getOpticalPSF(expid, aos=False):
     # returns a second variable containing the vignets and aperture fluxes and
     # errors
 
-    data, starStamp = digestor.digest_fits(files[0], do_exclude=True)
-    starStamps= [starStamp]
+    #data has certain columns removed, needed for processing.
+    #unfortunately I need full_data's vignettes and other info for later steps
+    #TODO optimize this cuz this is clearly wasteful
+    data, _full_data = digestor.digest_fits(files[0], do_exclude=True)
 
     for file in files[1:]:
-        tmpData, starStamp = digestor.digest_fits(file,do_exclude=True )
-        starStamps.append(starStamp)
+        tmpData, _full_data = digestor.digest_fits(file,do_exclude=True )
+        full_data = full_data.append(_full_data)
         data = data.append(tmpData)
 
     fit_i = jamierod_results.loc[expid]
@@ -159,14 +161,16 @@ def getOpticalPSF(expid, aos=False):
     data['rzero'] = misalignment['rzero']
     optPSFStamps, model= WF.draw_psf(data, misalignment=misalignment)
 
-    #TODO np.array(starStamps)?
-    return optPSFStamps, starStamps
+    #TODO np.array(full_data)?
+    #optPSFStamps is a numpy data cube
+    #full_data is data frame including vignettes of the stars
+    return optPSFStamps, full_data
 
 if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, starStamps = getOpticalPSF(expid)
+    psf, full_data = getOpticalPSF(expid)
     print(psf.shape)
 
 

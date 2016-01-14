@@ -29,28 +29,11 @@ from astropy.io import fits #TODO check if I should support pyfits
 from lucy import deconvolve
 
 #get optical PSF
-optPSFStamps, starStamps = getOpticalPSF(args['expid'])
+optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
-print starStamps[0].type
+vignettes = np.array(full_cat['VIGNET'])
 
-print optPSFStamps.shape, type(optPSFStamps)
-print starStamps.shape, type(starStamps)
-
-vignettes = []
-full_cats = []
-ext = 2
-
-for file in files:
-    hdulist = fits.open(file)
-    full_cats.append(hdulist[ext].data)
-    vignettes.append(hdulist[ext].data['VIGNET'])
-
-#vignettes = np.array(vignettes)
-
-print len(vignettes)
-for i in xrange(10):
-    print vignettes[i].shape
-print optPSFStamps.shape
+print vignettes.shape, optPSFStamps.shape
 
 from matplotlib import pyplot as plt
 plt.subplot(1,2,1)
