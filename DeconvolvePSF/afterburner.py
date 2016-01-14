@@ -31,6 +31,8 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, starStamps = getOpticalPSF(args['expid'])
 
+print starStamps[0].type
+
 print optPSFStamps.shape, type(optPSFStamps)
 print starStamps.shape, type(starStamps)
 

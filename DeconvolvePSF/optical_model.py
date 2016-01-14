@@ -157,7 +157,7 @@ def getOpticalPSF(expid, aos=False):
                     'z10d': fit_i['z10d'], 'z10x': fit_i['z10x'], 'z10y': fit_i['z10y'],
                     'rzero': fit_i['rzero']}
     data['rzero'] = misalignment['rzero']
-    optPSFStamps = WF.draw_psf(data, misalignment=misalignment)
+    optPSFStamps, model= WF.draw_psf(data, misalignment=misalignment)
 
     #TODO np.array(starStamps)?
     return optPSFStamps, starStamps
