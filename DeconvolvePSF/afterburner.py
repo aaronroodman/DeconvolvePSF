@@ -29,10 +29,10 @@ from astropy.io import fits #TODO check if I should support pyfits
 from lucy import deconvolve
 
 #get optical PSF
-optPSFStamps, file_directory = getOpticalPSF(args['expid'])
+optPSFStamps, starStamps = getOpticalPSF(args['expid'])
 
-#now we need the data to pair with this.
-files = glob(file_directory + '/*{0}'.format('_selpsfcat.fits'))
+print optPSFStamps.shape, type(optPSFStamps)
+print starStamps.shape, type(starStamps)
 
 vignettes = []
 full_cats = []

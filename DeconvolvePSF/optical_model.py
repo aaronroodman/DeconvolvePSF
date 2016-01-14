@@ -14,6 +14,7 @@ from __future__ import print_function
 import pandas as pd
 import numpy as np
 from os import path, makedirs
+from glob import glob
 
 KILS = True
 if KILS:
@@ -65,11 +66,13 @@ else:
 ###############################################################################
 def getOpticalPSF(expid, aos=False):
 
+    #TODO move up top?
     from WavefrontPSF.psf_interpolator import Mesh_Interpolator
     from WavefrontPSF.wavefront import Wavefront
     from WavefrontPSF.digestor import Digestor
     from WavefrontPSF.psf_evaluator import Moment_Evaluator
     from WavefrontPSF.donutengine import DECAM_Model_Wavefront
+
 
 
     medsubkeys = ['e0', 'e1', 'e2', 'E1norm', 'E2norm', 'delta1', 'delta2', 'zeta1', 'zeta2']
@@ -127,132 +130,43 @@ def getOpticalPSF(expid, aos=False):
     # load up data
     expid_path = '{0:08d}/{1:08d}'.format(expid - expid % 1000, expid)
     data_directory = base_directory + expid_path
+    files = glob(data_directory + '/*{0}'.format('_selpsfcat.fits'))
 
     # load up all the data from an exposure. Unfortunately, pandas is stupid and
     # can't handle the vignet format, so we don't load those up
     # note that you CAN load them up by passing "do_exclude=True", which then
     # returns a second variable containing the vignets and aperture fluxes and
     # errors
-    model = digestor.digest_directory(
-                data_directory,
-                file_type='_selpsfcat.fits')
-    # cut the old data appropriately
-    model = model[(model['SNR_WIN'] > 90) &
-                  (model['SNR_WIN'] < 400)]
 
-    # create normalized moments
-    model['E1norm'] = model['e1'] / model['e0']
-    model['E2norm'] = model['e2'] / model['e0']
+    data, starStamp = digestor.digest_fits(files[0], do_exclude=True)
+    starStamps= [starStamp]
 
-    # do med sub and add to WF_data
-    for key in medsubkeys:
-        model['{0}_medsub'.format(key)] = model[key] - np.median(model[key])
-    WF_data.data = model
+    for file in files[1:]:
+        tmpData, starStamp = digestor.digest_fits(file,do_exclude=True )
+        starStamps.append(starStamp)
+        data = data.append(tmpData)
 
-    # set the number of bins from total number of stars
-    if len(model) < 200:
-        num_bins = 0
-        num_bins_mis = 0
-        num_bins_whisker = 0
-    elif len(model) < 1000:
-        num_bins = 1
-        # num_bins_mis = 0
-        num_bins_mis = 1
-        num_bins_whisker = 1
-    elif len(model) < 10000:
-        num_bins = 2
-        # num_bins_mis = 1
-        num_bins_mis = 2
-        num_bins_whisker = 2
-    else:
-        num_bins = 3
-        num_bins_mis = 2
-        num_bins_whisker = 2
-
-
-    # generate optics model from fit data
     fit_i = jamierod_results.loc[expid]
-    # TODO: Add ALL fit_i params that were used?
-    # TODO: get rzero?
 
-    if aos:
-        misalignment = {'z04d': fit_i['aos_z04d'],
-                        'z05d': fit_i['aos_z05d'], 'z05x': fit_i['aos_z05x'], 'z05y': fit_i['aos_z05y'],
-                        'z06d': fit_i['aos_z06d'], 'z06x': fit_i['aos_z06x'], 'z06y': fit_i['aos_z06y'],
-                        'z07d': fit_i['aos_z07d'], 'z07x': fit_i['aos_z07x'], 'z07y': fit_i['aos_z07y'],
-                        'z08d': fit_i['aos_z08d'], 'z08x': fit_i['aos_z08x'], 'z08y': fit_i['aos_z08y'],
-                        'z09d': fit_i['aos_z09d'],
-                        'z10d': fit_i['aos_z10d'],
-                        'rzero': fit_i['aos_rzero']}
-    else:
-        misalignment = {'z04d': fit_i['z04d'], 'z04x': fit_i['z04x'], 'z04y': fit_i['z04y'],
-                        'z05d': fit_i['z05d'], 'z05x': fit_i['z05x'], 'z05y': fit_i['z05y'],
-                        'z06d': fit_i['z06d'], 'z06x': fit_i['z06x'], 'z06y': fit_i['z06y'],
-                        'z07d': fit_i['z07d'], 'z07x': fit_i['z07x'], 'z07y': fit_i['z07y'],
-                        'z08d': fit_i['z08d'], 'z08x': fit_i['z08x'], 'z08y': fit_i['z08y'],
-                        'z09d': fit_i['z09d'], 'z09x': fit_i['z09x'], 'z09y': fit_i['z09y'],
-                        'z10d': fit_i['z10d'], 'z10x': fit_i['z10x'], 'z10y': fit_i['z10y'],
-                        'rzero': fit_i['rzero']}
+    misalignment = {'z04d': fit_i['z04d'], 'z04x': fit_i['z04x'], 'z04y': fit_i['z04y'],
+                    'z05d': fit_i['z05d'], 'z05x': fit_i['z05x'], 'z05y': fit_i['z05y'],
+                    'z06d': fit_i['z06d'], 'z06x': fit_i['z06x'], 'z06y': fit_i['z06y'],
+                    'z07d': fit_i['z07d'], 'z07x': fit_i['z07x'], 'z07y': fit_i['z07y'],
+                    'z08d': fit_i['z08d'], 'z08x': fit_i['z08x'], 'z08y': fit_i['z08y'],
+                    'z09d': fit_i['z09d'], 'z09x': fit_i['z09x'], 'z09y': fit_i['z09y'],
+                    'z10d': fit_i['z10d'], 'z10x': fit_i['z10x'], 'z10y': fit_i['z10y'],
+                    'rzero': fit_i['rzero']}
+    data['rzero'] = misalignment['rzero']
+    optPSFStamps = WF.draw_psf(data, misalignment=misalignment)
 
-    # create model fit from donuts
-    WF.data = coords[num_bins].copy()
-    WF.data['rzero'] = misalignment['rzero']
-
-    #optPsfStamps are stamps of the optical psf. The dataModel is uh, the data. Leaving model in for posterity.
-    #dataModle is a pandas dataframe
-    optPSFStamps, dataModel = WF.draw_psf(WF.data, misalignment=misalignment)
-    return optPSFStamps, data_directory #dataModel
-    #I don't think I need the dataModel at all
-
-    #Not sure what this part does, but don't think it's relevant.
-
-    # WF.data = WF(WF.data, misalignment=misalignment)
-    # add dc factors
-    # WF.data['e0'] += fit_i['e0']
-    # WF.data['e1'] += fit_i['e1']
-    # WF.data['e2'] += fit_i['e2']
-    # WF.data['delta1'] += fit_i['delta1']
-    # WF.data['delta2'] += fit_i['delta2']
-    # WF.data['zeta1'] += fit_i['zeta1']
-    # WF.data['zeta2'] += fit_i['zeta2']
-    #
-    # # create normalized moments
-    # WF.data['E1norm'] = WF.data['e1'] / WF.data['e0']
-    # WF.data['E2norm'] = WF.data['e2'] / WF.data['e0']
-    #
-    # # update WF medsubs appropriately
-    # for key in medsubkeys:
-    #     WF.data['{0}_medsub'.format(key)] = WF.data[key] - np.median(WF.data[key])
-    #
-    # # add a couple diagnostic things
-    # WF.data['num_bins'] = num_bins
-    # WF.data['expid'] = expid
-    #
-    # # put in data into field
-    # WF.reduce(num_bins=num_bins)
-    # # create another reduced field for setting the color levels
-    # field_model, _, _ = WF.reduce_data_to_field(
-    #     WF.data, xkey='x', ykey='y', reducer=np.median,
-    #     num_bins=num_bins_mis)
-    #
-    # # update WF_data fields
-    # WF_data.reduce(num_bins=num_bins)
-    # # create another reduced field for setting the color levels
-    # field_data, _, _ = WF_data.reduce_data_to_field(
-    #     WF_data.data, xkey='x', ykey='y', reducer=np.median,
-    #     num_bins=num_bins_mis)
-    #
-    # # put in residual of data minus model for field
-    # for row_i, row in enumerate(rows):
-    #     WF.field[row + '_data'] = WF_data.field[row]
-    #     WF.field[row + '_residual'] = WF_data.field[row] - WF.field[row]
-    #     field_model[row + '_residual'] = field_data[row] - field_model[row]
+    #TODO np.array(starStamps)?
+    return optPSFStamps, starStamps
 
 if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, data_dir = getOpticalPSF(expid)
+    psf, starStamps = getOpticalPSF(expid)
     print(psf.shape)
 
 
