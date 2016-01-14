@@ -200,8 +200,8 @@ def getOpticalPSF(expid, aos=False):
 
     #optPsfStamps are stamps of the optical psf. The dataModel is uh, the data. Leaving model in for posterity.
     #dataModle is a pandas dataframe
-    optPsfStamps, dataModel = WF.draw_psf(WF.data, misalignment=misalignment)
-    return optPsfStamps, #dataModel
+    optPSFStamps, dataModel = WF.draw_psf(WF.data, misalignment=misalignment)
+    return optPSFStamps, data_directory #dataModel
     #I don't think I need the dataModel at all
 
     #Not sure what this part does, but don't think it's relevant.
@@ -252,13 +252,7 @@ if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, vignette = getOpticalPSF(expid)
+    psf, data_dir = getOpticalPSF(expid)
     print(psf.shape)
-    print(vignette.shape)
-    from matplotlib import pyplot as plt
-    plt.subplot(1,2,1)
-    plt.imshow(psf[0,:, :])
-    plt.subplot(1,2,2)
-    plt.imshow(vignette[0, :, :])
-    plt.show()
+
 

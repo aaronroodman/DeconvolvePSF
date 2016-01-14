@@ -16,3 +16,48 @@ TODO Details on actually running the module.
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
 
+parser.add_argument('expid', metavar = 'expid', type = int, help =\
+                    'ID of the exposure to analyze')
+
+args = vars(parser.parse_args())
+
+import numpy as np
+from itertools import izip
+from optical_model import getOpticalPSF
+from glob import glob
+from astropy.io import fits #TODO check if I should support pyfits
+from lucy import deconvolve
+
+#get optical PSF
+optPSFStamps, file_directory = getOpticalPSF(args['expid'])
+
+#now we need the data to pair with this.
+files = glob(file_directory + '/*{0}'.format('_selpsfcat.fits'))
+
+vignettes = []
+full_cats = []
+ext = 2
+
+for file in files:
+    hdulist = fits.open(file)
+    full_cats.append(hdulist[ext].data)
+    vignettes.append(hdulist[ext].data['VIGNET'])
+
+vignettes = np.array(vignettes)
+
+for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
+    aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=0,convergence=1.0e-3,chi2Level=0.,niterations=50)
+    break
+
+print aptPSFEst.shape
+
+from matplotlib import pyplot as plt
+plt.subplot(1,3,1)
+plt.title('Original')
+plt.imshow(vignette)
+plt.subplot(1,3, 2)
+plt.title('Optical')
+plt.imshow(optPSFStamp)
+plt.subplot(1,3,3)
+plt.title('Remainder')
+plt.imshow(aptPSFEst)
