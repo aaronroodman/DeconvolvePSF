@@ -45,6 +45,15 @@ for file in files:
 
 vignettes = np.array(vignettes)
 
+from matplotlib import pyplot as plt
+plt.subplot(1,2,1)
+plt.title('Original')
+plt.imshow(vignettes[0,:,:])
+plt.subplot(1,2, 2)
+plt.title('Optical')
+plt.imshow(optPSFStamps[0,:,:])
+plt.show()
+
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=0,convergence=1.0e-3,chi2Level=0.,niterations=50)
     break
