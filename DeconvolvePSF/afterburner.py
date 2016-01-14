@@ -45,6 +45,8 @@ for file in files:
 
 vignettes = np.array(vignettes)
 
+print vignettes.shape
+
 from matplotlib import pyplot as plt
 plt.subplot(1,2,1)
 plt.title('Original')
