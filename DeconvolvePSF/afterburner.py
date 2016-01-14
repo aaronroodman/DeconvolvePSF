@@ -43,14 +43,17 @@ for file in files:
     full_cats.append(hdulist[ext].data)
     vignettes.append(hdulist[ext].data['VIGNET'])
 
-vignettes = np.array(vignettes)
+#vignettes = np.array(vignettes)
 
-print vignettes.shape
+print len(vignettes)
+for i in xrange(10):
+    print vignettes[i].shape
+print optPSFStamps.shape
 
 from matplotlib import pyplot as plt
 plt.subplot(1,2,1)
 plt.title('Original')
-plt.imshow(vignettes[0,:,:])
+plt.imshow(vignettes[0][0,:,:])
 plt.subplot(1,2, 2)
 plt.title('Optical')
 plt.imshow(optPSFStamps[0,:,:])
