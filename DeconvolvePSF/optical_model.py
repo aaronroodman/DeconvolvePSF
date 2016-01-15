@@ -151,6 +151,7 @@ def getOpticalPSF(expid, aos=False):
 
     fit_i = jamierod_results.loc[expid]
 
+    #making rzero larger
     misalignment = {'z04d': fit_i['z04d'], 'z04x': fit_i['z04x'], 'z04y': fit_i['z04y'],
                     'z05d': fit_i['z05d'], 'z05x': fit_i['z05x'], 'z05y': fit_i['z05y'],
                     'z06d': fit_i['z06d'], 'z06x': fit_i['z06x'], 'z06y': fit_i['z06y'],
@@ -158,7 +159,9 @@ def getOpticalPSF(expid, aos=False):
                     'z08d': fit_i['z08d'], 'z08x': fit_i['z08x'], 'z08y': fit_i['z08y'],
                     'z09d': fit_i['z09d'], 'z09x': fit_i['z09x'], 'z09y': fit_i['z09y'],
                     'z10d': fit_i['z10d'], 'z10x': fit_i['z10x'], 'z10y': fit_i['z10y'],
-                    'rzero': fit_i['rzero']}
+                    'rzero': 1.3*fit_i['rzero']}
+
+    
     data['rzero'] = misalignment['rzero']
     optPSFStamps, model= WF.draw_psf(data, misalignment=misalignment)
 

@@ -101,6 +101,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
         # subtract 2nd order moments in quadrature, use an object with the difference
         Mxx = image_moments['Mxx'][0] - PSF_moments['Mxx'][0]
+        print image_moments['Mxx'][0], PSF_moments['Mxx'][0]
         Myy = image_moments['Myy'][0] - PSF_moments['Myy'][0]
         Mxy = image_moments['Mxy'][0] - PSF_moments['Mxy'][0]
 

@@ -38,19 +38,18 @@ for rec_arr in full_cat:
     for v in rec_arr['VIGNET']:
         #TODO Check for off by one errors and centering.
         #Slice 63x63 down to 32x32 so deconv will work.
+        #TODO Turn sliced off pixels into background estimate
         vignettes[i] = v[15:47, 15:47]
         i+=1
 
-print vignettes.shape
-print optPSFStamps.shape
-
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
-    aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=0,convergence=1.0e-3,chi2Level=0.,niterations=50)
+    aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1.0e-3,chi2Level=0.,niterations=50)
     break
 
 print aptPSFEst.shape,aptPSFEst.mean()
 
 from matplotlib import pyplot as plt
+
 plt.subplot(1,3,1)
 plt.title('Original')
 plt.imshow(vignette)
