@@ -48,7 +48,7 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=0,convergence=1.0e-3,chi2Level=0.,niterations=50)
     break
 
-print aptPSFEst.shape
+print aptPSFEst.shape,aptPSFEst.mean()
 
 from matplotlib import pyplot as plt
 plt.subplot(1,3,1)
@@ -60,3 +60,5 @@ plt.imshow(optPSFStamp)
 plt.subplot(1,3,3)
 plt.title('Remainder')
 plt.imshow(aptPSFEst)
+
+plt.show()
