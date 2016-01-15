@@ -3,13 +3,14 @@ import scipy
 import numpy.lib.index_tricks as itricks
 import pdb
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
+from scipy.signal import convolve2d as convolve
 
-def convolve(A, B):
-    """ Performs a convolution of two 2D arrays """
-    C = np.fft.ifft2(np.fft.fft2(A) * np.fft.fft2(B))
-    C = np.fft.fftshift(C)
-    C = C / np.sum(C)
-    return np.real(C)
+# def convolve(A, B):
+#     """ Performs a convolution of two 2D arrays """
+#     C = np.fft.ifft2(np.fft.fft2(A) * np.fft.fft2(B))
+#     C = np.fft.fftshift(C)
+#     C = C / np.sum(C)
+#     return np.real(C)
 
 def convolveStar(A, B):
     """ Performs a convolution of two 2D arrays, but take the complex conjugate of B """
