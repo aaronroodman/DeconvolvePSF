@@ -142,6 +142,7 @@ def getOpticalPSF(expid, aos=False):
     #unfortunately I need full_data's vignettes and other info for later steps
     #TODO optimize this cuz this is clearly wasteful
     data, _full_data = digestor.digest_fits(files[0], do_exclude=True)
+    full_data = [_full_data]
 
     for file in files[1:]:
         tmpData, _full_data = digestor.digest_fits(file,do_exclude=True )

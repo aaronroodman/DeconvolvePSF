@@ -31,7 +31,12 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
-vignettes = np.array(full_cat['VIGNET'])
+vignettes = []
+
+for rec_arr in full_cat:
+    vignettes.append(rec_arr['VIGNET'])
+
+print vignettes[0]
 
 print vignettes.shape, optPSFStamps.shape
 
