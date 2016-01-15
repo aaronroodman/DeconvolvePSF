@@ -43,7 +43,7 @@ for rec_arr in full_cat:
         i+=1
 
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
-    aptPSFEst,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1.0e-3,chi2Level=0.,niterations=50, extra= True)
+    aptPSFEst,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     break
 
 
@@ -63,6 +63,7 @@ plt.imshow(aptPSFEst,interpolation='none',origin='lower',cmap='gray',norm=LogNor
 plt.show()
 
 f2,ax2Arr = plt.subplots(1,10)
+print len(ax2Arr), len(psiByIter)
 for i in xrange(10):
     ax2Arr[i].imshow(psiByIter[i],interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
 f2.show()
