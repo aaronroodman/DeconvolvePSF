@@ -31,12 +31,14 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
-vignettes = np.zeros((optPSFStamps.shape[0], 63,63))
+vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
 i=0
 #TODO See if this is slow and optomize
 for rec_arr in full_cat:
     for v in rec_arr['VIGNET']:
-        vignettes[i] = v
+        #TODO Check for off by one errors and centering.
+        #Slice 63x63 down to 32x32 so deconv will work.
+        vignettes[i] = v[15:47, 15:47]
         i+=1
 
 print vignettes.shape
