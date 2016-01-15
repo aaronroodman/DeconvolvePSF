@@ -73,7 +73,7 @@ def makeMask(image,sigma,nsigma=3.):
 
 def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,convergence=-1,chi2Level=0.0,extra=False):
     """ Implementation of the Richardson-Lucy deconvolution algorithm.
-    Notation follows Lucy 1974, Eqn 15 and 14.  Add background noise term following 
+    Notation follows Lucy 1974, Eqn 15 and 14.  Add  noise term following
     Snyder et al 1993.
 
     Arguments

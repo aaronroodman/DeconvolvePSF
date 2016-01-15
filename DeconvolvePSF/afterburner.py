@@ -43,21 +43,25 @@ for rec_arr in full_cat:
         i+=1
 
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
-    aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1.0e-3,chi2Level=0.,niterations=50)
+    aptPSFEst,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1.0e-3,chi2Level=0.,niterations=50, extra= True)
     break
 
-print aptPSFEst.shape,aptPSFEst.mean()
-
 from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
 
 plt.subplot(1,3,1)
 plt.title('Original')
-plt.imshow(vignette)
+plt.imshow(vignette,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
 plt.subplot(1,3, 2)
 plt.title('Optical')
-plt.imshow(optPSFStamp)
+plt.imshow(optPSFStamp,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
 plt.subplot(1,3,3)
 plt.title('Remainder')
-plt.imshow(aptPSFEst)
+plt.imshow(aptPSFEst,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
 
 plt.show()
+
+f2,ax2Arr = plt.subplots(1,10)
+for i in xrange(10):
+    ax2Arr[i].imshow(psiByIter[i],interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
+f2.show()
