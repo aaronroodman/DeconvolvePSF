@@ -31,27 +31,15 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
-vignettes = []
-
+vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
+i=0
+#TODO See if this is slow and optomize
 for rec_arr in full_cat:
-    vignettes.append(rec_arr['VIGNET'])
+    for v in rec_arr['VIGNET']:
+        vignettes[i] = v
+        i+=1
 
-print optPSFStamps.shape
-
-t = 0
-for v in vignettes:
-    t+= v.shape[0] 
-
-print t
-
-from matplotlib import pyplot as plt
-plt.subplot(1,2,1)
-plt.title('Original')
-plt.imshow(vignettes[0][0,:,:])
-plt.subplot(1,2, 2)
-plt.title('Optical')
-plt.imshow(optPSFStamps[0,:,:])
-plt.show()
+print vignettes.shape
 
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=0,convergence=1.0e-3,chi2Level=0.,niterations=50)
