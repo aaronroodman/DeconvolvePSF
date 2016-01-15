@@ -36,9 +36,13 @@ vignettes = []
 for rec_arr in full_cat:
     vignettes.append(rec_arr['VIGNET'])
 
-print vignettes[0]
+print optPSFStamps.shape
 
-print vignettes.shape, optPSFStamps.shape
+t = 0
+for v in vignettes:
+    t+= v.shape[0] 
+
+print t
 
 from matplotlib import pyplot as plt
 plt.subplot(1,2,1)

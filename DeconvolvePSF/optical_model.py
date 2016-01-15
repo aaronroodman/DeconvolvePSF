@@ -146,7 +146,7 @@ def getOpticalPSF(expid, aos=False):
 
     for file in files[1:]:
         tmpData, _full_data = digestor.digest_fits(file,do_exclude=True )
-        full_data = full_data.append(_full_data)
+        full_data.append(_full_data)
         data = data.append(tmpData)
 
     fit_i = jamierod_results.loc[expid]
