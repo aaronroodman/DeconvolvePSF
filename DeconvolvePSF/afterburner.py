@@ -46,6 +46,7 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1.0e-3,chi2Level=0.,niterations=50, extra= True)
     break
 
+
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 
