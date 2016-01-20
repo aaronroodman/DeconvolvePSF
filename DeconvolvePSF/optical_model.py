@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 from os import path, makedirs
 from glob import glob
+from astropy.io import fits
 
 KILS = True
 if KILS:
@@ -60,6 +61,8 @@ else:
     # my laptop
     new_mesh_directory = '/Users/cpd/Projects/WavefrontPSF/meshes/Science-20140212s2-v20i2'
     mesh_directory = '/Users/cpd/Projects/WavefrontPSF/meshes/Science-20140212s2-v20i2'
+
+
 
 ###############################################################################
 # run
@@ -141,13 +144,13 @@ def getOpticalPSF(expid, aos=False):
     #data has certain columns removed, needed for processing.
     #unfortunately I need full_data's vignettes and other info for later steps
     #TODO optimize this cuz this is clearly wasteful
-    data, _full_data = digestor.digest_fits(files[0], do_exclude=True)
-    full_data = [_full_data]
+    data = digestor.digest_fits(files[0], do_exclude=False)
+    metaHDUList = [fits.open(files[0])] #list of HDULists #META
 
     for file in files[1:]:
-        tmpData, _full_data = digestor.digest_fits(file,do_exclude=True )
-        full_data.append(_full_data)
+        tmpData = digestor.digest_fits(file,do_exclude=False )
         data = data.append(tmpData)
+        metaHDUList.append(fits.open(file))
 
     fit_i = jamierod_results.loc[expid]
 
@@ -168,13 +171,13 @@ def getOpticalPSF(expid, aos=False):
     #TODO np.array(full_data)?
     #optPSFStamps is a numpy data cube
     #full_data is data frame including vignettes of the stars
-    return optPSFStamps, full_data
+    return optPSFStamps, metaHDUList
 
 if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, full_data = getOpticalPSF(expid)
+    psf, metaHDUList = getOpticalPSF(expid)
     print(psf.shape)
 
 

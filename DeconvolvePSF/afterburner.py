@@ -29,19 +29,17 @@ from astropy.io import fits #TODO check if I should support pyfits
 from lucy import deconvolve
 
 #get optical PSF
-optPSFStamps, full_cat = getOpticalPSF(args['expid'])
+optPSFStamps, metaHDUList = getOpticalPSF(args['expid'])
 
-print 'Opts Calculated.' , len(full_cat)
-
-firstRunLength = len(full_cat[0])
+print 'Opts Calculated.' ,
 
 #vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
-vignettes = np.zeros((firstRunLength, 32,32))
+vignettes = np.zeros((71, 32,32))
 
 i=0
 #TODO See if this is slow and optomize
-for rec_arr in full_cat:
-    for v in rec_arr['VIGNET']:
+for hdulist in metaHDUList:
+    for v in hdulist[2].data['VIGNET']:
         #TODO Check for off by one errors and centering.
         #Slice 63x63 down to 32x32 so deconv will work.
         #TODO Turn sliced off pixels into background estimate
@@ -57,21 +55,16 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
     aptPSFEst_list.append(aptPSFEst.flatten())
 
+#TODO np.array(aptPSFst_list?)
+
 print 'Deconv done.'
 i =0
-for rec_arr in full_cat:
-    #for j in xrange(optPSFStamps.shape[0]):
-    for j in xrange(len(rec_arr)):
-        rec_arr.VIGNET[j] = aptPSFEst_list[i+j]
-    i+=len(rec_arr)
-
-    tbhdu = fits.BinTableHDU.from_columns(rec_arr)
-    tbhdu.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
-
-    prihdr = fits.Header()
-    prihdu = fits.PrimaryHDU(header=prihdr)
-    thdulist = fits.HDUList([prihdu,tbhdu])
-    thdulist.writeto('test.fits',clobber=True)
+for hdulist in metaHDUList:
+    #for j in xrange(len(rec_arr)):
+    for j in xrange(71):
+        hdulist[2].data['VIGNET'][j] = aptPSFEst_list[i+j]
+    #i+=len(rec_arr)
+    hdulist.writeto('test.fits')
     break
 
 print 'Copy and write done.'
