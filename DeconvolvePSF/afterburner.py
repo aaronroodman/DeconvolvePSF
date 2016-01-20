@@ -54,7 +54,7 @@ for hdulist in meta_hdulist:
         vig_idx+=1
     '''
     list_len = hdulist[2].data.shape[0]
-    vignettes[vig_idx:vig_idx+list_len] = hdulist[2].data['VIGNET'][:]
+    vignettes[vig_idx:vig_idx+list_len] = hdulist[2].data['VIGNET'][:, 15:47, 15:47]
     vig_idx+=list_len
 
 atmpsf_list = []
