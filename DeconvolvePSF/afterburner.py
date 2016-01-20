@@ -19,7 +19,15 @@ parser = ArgumentParser(description = desc)
 parser.add_argument('expid', metavar = 'expid', type = int, help =\
                     'ID of the exposure to analyze')
 
+parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
+                    'Directory to store outputs.')
+
 args = vars(parser.parse_args())
+
+#TODO check that outputdir exists
+
+if args['outputDir'][-1]  != '/':
+    args['outputDir']+='/'
 
 import numpy as np
 from itertools import izip
@@ -65,17 +73,15 @@ for hdulist in metaHDUList:
     i+=hdulist[2].data.shape[0]
 
     #Make new filename from old one.
-    originalFname = hdulist.filename()
+    originalFname = hdulist.filename().split('/')[-1]#just get the filename, not the path
     originalFnameSplit = originalFname.split('_')
     originalFnameSplit[-1] = '_seldeconv.fits'
-    hdulist.writeto(''.join(originalFnameSplit), clobber = True)
+    hdulist.writeto(args['outputDir']+''.join(originalFnameSplit), clobber = True)
 
 print 'Copy and write done.'
 
-#NOTE Not sure if I need to do a more involved write.
-#Could save myself the trouble by having the hdulist objects before I modify them
 
-#fits.writeto('test.fits', full_cat[0])
+#TODO Clear temporary files?
 
 '''
 from matplotlib import pyplot as plt
