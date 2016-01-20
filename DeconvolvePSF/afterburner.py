@@ -31,7 +31,7 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
-print 'Opts Calculated.'
+print 'Opts Calculated.' , len(full_cat)
 
 vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
 i=0
@@ -51,7 +51,7 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
     aptPSFEst_list.append(aptPSFEst.flatten())
 
-print 'Deconv done.', len(full_cat)
+print 'Deconv done.'
 
 for rec_arr in full_cat:
     for j in xrange(i): 
