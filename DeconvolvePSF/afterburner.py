@@ -51,6 +51,9 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst = np.zeros((63,63))
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
     aptPSFEst_list.append(aptPSFEst.flatten())
+    i-=1
+    if i ==0:
+        break
 
 print 'Deconv done.'
 
@@ -67,7 +70,8 @@ from astropy.io import fits
 
 #fits.writeto('test.fits', full_cat[0])
 
-tbhdu = fits.new_table(full_cat[0])
+#NOTE Depreceated. Use BinTableHDU.from_columns
+tbhdu = fits.BinTableHDU.from_columns(rec_arr[0])
 tbhdu.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
 
 prihdr = fits.Header()
