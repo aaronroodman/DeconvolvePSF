@@ -12,7 +12,6 @@ the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 
 #TODO Details on actually running the module.
 '''
-#TODO (General) I switch between camelcase and underscores. Python style guide calls for underscores, so fix.
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
 
@@ -33,51 +32,57 @@ if args['outputDir'][-1]  != '/':
 
 import numpy as np
 from itertools import izip
-from optical_model import getOpticalPSF
+from optical_model import get_optical_psf
 from lucy import deconvolve
 
 #get optical PSF
-optPSFStamps, metaHDUList = getOpticalPSF(args['expid'])
+optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
 print 'Opts Calculated.' ,
 
-vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
+vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 
-vigIdx=0
-#TODO See if this is slow and optomize
-for hdulist in metaHDUList:
+vig_idx=0
+#TODO See if this is slow and optomize.
+for hdulist in meta_hdulist:
+    #TODO Check for off by one errors and centering.
+    #TODO Turn sliced off pixels into background estimate
+    '''
     for v in hdulist[2].data['VIGNET']:
-        #TODO Check for off by one errors and centering.
         #Slice 63x63 down to 32x32 so deconv will work.
-        #TODO Turn sliced off pixels into background estimate
-        vignettes[vigIdx] = v[15:47, 15:47]
-        vigIdx+=1
+        vignettes[vig_idx] = v[15:47, 15:47]
+        vig_idx+=1
+    '''
+    list_len = hdulist[2].data.shape[0]
+    vignettes[vig_idx:vig_idx+list_len] = hdulist[2].data['VIGNET'][:]
+    vig_idx+=list_len
 
-aptPSFEst_list = []
-for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
-    aptPSFEst_small,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
-    aptPSFEst = np.zeros((63,63))
-    aptPSFEst[15:47, 15:47] = aptPSFEst_small
-    aptPSFEst_list.append(aptPSFEst)
-
-    print aptPSFEst_small.mean(), aptPSFEst_small.std()
-    print '*-_-'*10
+atmpsf_list = []
+for optpsf, vignette in izip(optpsf_stamps, vignettes):
+    atmpsf_small,diffs,psiByIter,chi2ByIter = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
+    atmpsf = np.zeros((63,63))
+    atmpsf[15:47, 15:47] = atmpsf_small
+    atmpsf_list.append(atmpsf)
 
 #TODO np.array(aptPSFst_list?)
 
 print 'Deconv done.'
-i =0
-for hdulist in metaHDUList:
+atmpsf_idx =0
+for hdulist in meta_hdulist:
     #for j in xrange(len(rec_arr)):
+    '''
     for j in xrange(hdulist[2].data.shape[0]):
-        hdulist[2].data['VIGNET'][j] = aptPSFEst_list[i+j]
-    i+=hdulist[2].data.shape[0]
+        hdulist[2].data['VIGNET'][j] = atmpsf_list[i+j]
+    '''
+    list_len = hdulist[2].data.shape[0]
+    hdulist[2].data['VIGNET'] = atmpsf_list[atmpsf_idx:atmpsf_idx+list_len]
+    atmpsf_idx+=list_len
 
     #Make new filename from old one.
-    originalFname = hdulist.filename().split('/')[-1]#just get the filename, not the path
-    originalFnameSplit = originalFname.split('_')
-    originalFnameSplit[-1] = '_seldeconv.fits'
-    hdulist.writeto(args['outputDir']+''.join(originalFnameSplit), clobber = True)
+    original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
+    original_fname_split = original_fname.split('_')
+    original_fname_split[-1] = '_seldeconv.fits'
+    hdulist.writeto(args['outputDir']+''.join(original_fname_split), clobber = True)
 
 print 'Copy and write done.'
 
@@ -94,7 +99,7 @@ for i in xrange(10):
     plt.imshow(vignette,interpolation='none',origin='lower',cmap='gray')
     plt.subplot(1,3, 2)
     plt.title('Optical')
-    plt.imshow(optPSFStamp,interpolation='none',origin='lower',cmap='gray')
+    plt.imshow(optpsf,interpolation='none',origin='lower',cmap='gray')
     plt.subplot(1,3,3)
     plt.title('Remainder')
     plt.imshow(aptPSFEst,interpolation='none',origin='lower',cmap='gray')

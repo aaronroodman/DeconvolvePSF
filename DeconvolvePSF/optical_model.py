@@ -67,7 +67,7 @@ else:
 ###############################################################################
 # run
 ###############################################################################
-def getOpticalPSF(expid, aos=False):
+def get_optical_psf(expid, aos=False):
 
     #TODO move up top?
     from WavefrontPSF.psf_interpolator import Mesh_Interpolator
