@@ -65,7 +65,15 @@ from astropy.io import fits
 #NOTE Not sure if I need to do a more involved write. 
 #Could save myself the trouble by having the hdulist objects before I modify them
 
-fits.writeto('test.fits', full_cat[0])
+#fits.writeto('test.fits', full_cat[0])
+
+tbhdu = fits.new_table(full_cat[0])
+tbhdu.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
+
+prihdr = fits.Header()
+prihdu = fits.PrimaryHDU(header=prihdr)
+thdulist = fits.HDUList([prihdu,tbhdu])
+thdulist.writeto('test.fits',clobber=True)
 
 '''
 from matplotlib import pyplot as plt
