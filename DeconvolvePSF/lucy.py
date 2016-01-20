@@ -174,6 +174,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         psi_r = np.array(psi_rplus1)  # does a deepcopy
 
 
+    #TODO rescale deconv by flux
 
     # we are done!
     if extra:

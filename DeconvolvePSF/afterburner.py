@@ -33,7 +33,11 @@ optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
 print 'Opts Calculated.' , len(full_cat)
 
-vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
+firstRunLength = len(full_cat[0])
+
+#vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
+vignettes = np.zeros((firstRunLength, 32,32))
+
 i=0
 #TODO See if this is slow and optomize
 for rec_arr in full_cat:
@@ -42,6 +46,8 @@ for rec_arr in full_cat:
         #Slice 63x63 down to 32x32 so deconv will work.
         #TODO Turn sliced off pixels into background estimate
         vignettes[i] = v[15:47, 15:47]
+        i+=1
+    break
 
 
 aptPSFEst_list = []
@@ -52,28 +58,28 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst_list.append(aptPSFEst.flatten())
 
 print 'Deconv done.'
-
+i =0
 for rec_arr in full_cat:
-    for j in xrange(i): 
-        rec_arr.VIGNET[j] = aptPSFEst_list[j] 
+    #for j in xrange(optPSFStamps.shape[0]):
+    for j in xrange(len(rec_arr)):
+        rec_arr.VIGNET[j] = aptPSFEst_list[i+j]
+    i+=len(rec_arr)
+
+    tbhdu = fits.BinTableHDU.from_columns(rec_arr)
+    tbhdu.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
+
+    prihdr = fits.Header()
+    prihdu = fits.PrimaryHDU(header=prihdr)
+    thdulist = fits.HDUList([prihdu,tbhdu])
+    thdulist.writeto('test.fits',clobber=True)
     break
 
-print 'Copy done.'
+print 'Copy and write done.'
 
-from astropy.io import fits
-#NOTE Not sure if I need to do a more involved write. 
+#NOTE Not sure if I need to do a more involved write.
 #Could save myself the trouble by having the hdulist objects before I modify them
 
 #fits.writeto('test.fits', full_cat[0])
-
-#NOTE Depreceated. Use BinTableHDU.from_columns
-tbhdu = fits.BinTableHDU.from_columns(full_cat)
-tbhdu.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
-
-prihdr = fits.Header()
-prihdu = fits.PrimaryHDU(header=prihdr)
-thdulist = fits.HDUList([prihdu,tbhdu])
-thdulist.writeto('test.fits',clobber=True)
 
 '''
 from matplotlib import pyplot as plt
