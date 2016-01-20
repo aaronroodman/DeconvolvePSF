@@ -33,8 +33,7 @@ optPSFStamps, metaHDUList = getOpticalPSF(args['expid'])
 
 print 'Opts Calculated.' ,
 
-#vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
-vignettes = np.zeros((71, 32,32))
+vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
 
 i=0
 #TODO See if this is slow and optomize
@@ -45,7 +44,7 @@ for hdulist in metaHDUList:
         #TODO Turn sliced off pixels into background estimate
         vignettes[i] = v[15:47, 15:47]
         i+=1
-    break
+
 
 
 aptPSFEst_list = []
@@ -53,7 +52,7 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst_small,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     aptPSFEst = np.zeros((63,63))
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
-    aptPSFEst_list.append(aptPSFEst.flatten())
+    aptPSFEst_list.append(aptPSFEst)
 
 #TODO np.array(aptPSFst_list?)
 
@@ -61,11 +60,15 @@ print 'Deconv done.'
 i =0
 for hdulist in metaHDUList:
     #for j in xrange(len(rec_arr)):
-    for j in xrange(71):
+    for j in xrange(hdulist[2].data.shape[0]):
         hdulist[2].data['VIGNET'][j] = aptPSFEst_list[i+j]
-    #i+=len(rec_arr)
-    hdulist.writeto('test.fits')
-    break
+    i+=hdulist[2].data.shape[0]
+
+    #Make new filename from old one.
+    originalFname = hdulist.filename()
+    originalFnameSplit = originalFname.split('_')
+    originalFnameSplit[-1] = '_seldeconv.fits'
+    hdulist.writeto(''.join(originalFnameSplit), clobber = True)
 
 print 'Copy and write done.'
 
