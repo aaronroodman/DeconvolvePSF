@@ -10,9 +10,9 @@ from the observed stars (using Richardson-Lucy deconvolution), the remainder wil
 portion of the psf. This module load in preprocessed observed stars, run WavefrontPSF on them, deconvolve
 the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 
-TODO Details on actually running the module.
+#TODO Details on actually running the module.
 '''
-
+#TODO (General) I switch between camelcase and underscores. Python style guide calls for underscores, so fix.
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
 
@@ -34,7 +34,6 @@ if args['outputDir'][-1]  != '/':
 import numpy as np
 from itertools import izip
 from optical_model import getOpticalPSF
-from astropy.io import fits #TODO check if I should support pyfits
 from lucy import deconvolve
 
 #get optical PSF
@@ -44,15 +43,15 @@ print 'Opts Calculated.' ,
 
 vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
 
-i=0
+vigIdx=0
 #TODO See if this is slow and optomize
 for hdulist in metaHDUList:
     for v in hdulist[2].data['VIGNET']:
         #TODO Check for off by one errors and centering.
         #Slice 63x63 down to 32x32 so deconv will work.
         #TODO Turn sliced off pixels into background estimate
-        vignettes[i] = v[15:47, 15:47]
-        i+=1
+        vignettes[vigIdx] = v[15:47, 15:47]
+        vigIdx+=1
 
 aptPSFEst_list = []
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
@@ -61,7 +60,8 @@ for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
     aptPSFEst_list.append(aptPSFEst)
 
-    print aptPSFEst_small.mean()
+    print aptPSFEst_small.mean(), aptPSFEst_small.std()
+    print '*-_-'*10
 
 #TODO np.array(aptPSFst_list?)
 
