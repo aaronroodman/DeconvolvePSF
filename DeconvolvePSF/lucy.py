@@ -99,6 +99,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         image_moments = evaluator(phi_tilde)
         PSF_moments = evaluator(PSF)
 
+        #TODO what to do if makeGaussian throws an error?
         # subtract 2nd order moments in quadrature, use an object with the difference
         Mxx = image_moments['Mxx'][0] - PSF_moments['Mxx'][0]
         #print image_moments['Mxx'][0], PSF_moments['Mxx'][0]

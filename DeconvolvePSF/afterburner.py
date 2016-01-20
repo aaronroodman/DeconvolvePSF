@@ -24,7 +24,9 @@ parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
 
 args = vars(parser.parse_args())
 
-#TODO check that outputdir exists
+from os import path
+if not path.isdir(args['outputDir']):
+    raise IOError("The directory %s does not exist."%args['outputDir'])
 
 if args['outputDir'][-1]  != '/':
     args['outputDir']+='/'
@@ -32,7 +34,6 @@ if args['outputDir'][-1]  != '/':
 import numpy as np
 from itertools import izip
 from optical_model import getOpticalPSF
-from glob import glob
 from astropy.io import fits #TODO check if I should support pyfits
 from lucy import deconvolve
 
@@ -53,14 +54,14 @@ for hdulist in metaHDUList:
         vignettes[i] = v[15:47, 15:47]
         i+=1
 
-
-
 aptPSFEst_list = []
 for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
     aptPSFEst_small,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     aptPSFEst = np.zeros((63,63))
     aptPSFEst[15:47, 15:47] = aptPSFEst_small
     aptPSFEst_list.append(aptPSFEst)
+
+    print aptPSFEst_small.mean()
 
 #TODO np.array(aptPSFst_list?)
 
