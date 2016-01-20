@@ -31,6 +31,8 @@ from lucy import deconvolve
 #get optical PSF
 optPSFStamps, full_cat = getOpticalPSF(args['expid'])
 
+print 'Opts Calculated.'
+
 vignettes = np.zeros((optPSFStamps.shape[0], 32,32))
 i=0
 #TODO See if this is slow and optomize
@@ -41,29 +43,52 @@ for rec_arr in full_cat:
         #TODO Turn sliced off pixels into background estimate
         vignettes[i] = v[15:47, 15:47]
         i+=1
-
-for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
-    aptPSFEst,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     break
 
+aptPSFEst_list = []
+for optPSFStamp, vignette in izip(optPSFStamps, vignettes):
+    aptPSFEst_small,diffs,psiByIter,chi2ByIter = deconvolve(optPSFStamp,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
+    aptPSFEst = np.zeros((63,63))
+    aptPSFEst[15:47, 15:47] = aptPSFEst_small
+    aptPSFEst_list.append(aptPSFEst.flatten())
 
+print 'Deconv done.'
+
+for rec_arr in full_cat:
+    for j in xrange(i): 
+        rec_arr.VIGNET[j] = aptPSFEst_list[j] 
+    break
+
+print 'Copy done.'
+
+from astropy.io import fits
+#NOTE Not sure if I need to do a more involved write. 
+#Could save myself the trouble by having the hdulist objects before I modify them
+
+fits.writeto('test.fits', full_cat[0])
+
+'''
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
-
-plt.subplot(1,3,1)
-plt.title('Original')
-plt.imshow(vignette,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
-plt.subplot(1,3, 2)
-plt.title('Optical')
-plt.imshow(optPSFStamp,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
-plt.subplot(1,3,3)
-plt.title('Remainder')
-plt.imshow(aptPSFEst,interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
-
-plt.show()
-
-f2,ax2Arr = plt.subplots(1,10)
-print len(ax2Arr), len(psiByIter)
 for i in xrange(10):
+
+    plt.subplot(1,3,1)
+    plt.title('Original')
+    plt.imshow(vignette,interpolation='none',origin='lower',cmap='gray')
+    plt.subplot(1,3, 2)
+    plt.title('Optical')
+    plt.imshow(optPSFStamp,interpolation='none',origin='lower',cmap='gray')
+    plt.subplot(1,3,3)
+    plt.title('Remainder')
+    plt.imshow(aptPSFEst,interpolation='none',origin='lower',cmap='gray')
+
+    plt.show()
+
+nPlots = len(psiByIter)
+nPlots = 10 if 10< nPlots else nPlots
+
+f2,ax2Arr = plt.subplots(1,nPlots)
+for i in xrange(nPlots):
     ax2Arr[i].imshow(psiByIter[i],interpolation='none',origin='lower',cmap='gray',norm=LogNorm(vmin=1.0e-4, vmax=1.0))
 f2.show()
+'''
