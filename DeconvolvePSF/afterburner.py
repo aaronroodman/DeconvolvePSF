@@ -87,8 +87,10 @@ print 'Copy and write done.'
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
 #TODO This is gonna run on all *.fits in the outputdir. If the user doesn't want that uh... then what?
-psfex_success = bool(call([psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]))
+command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]
+#If shell != True, the wildcard won't work
+psfex_success = call(' '.join(command_list), shell = True)
 
-print 'PSFEx Call Successful: %b'%psfex_success
+print 'PSFEx Call Successful: %s'%bool(psfex_success)
 
 #TODO Clear temporary files?
