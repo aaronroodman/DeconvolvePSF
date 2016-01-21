@@ -144,6 +144,7 @@ def get_optical_psf(expid, aos=False):
     #data has certain columns removed, needed for processing.
     #unfortunately I need full_data's vignettes and other info for later steps
     #TODO optimize this cuz this is clearly wasteful
+    #I'm loading an HDUlist in 2 places, but overhauling the digestor to load it once would be a challenge
     data = digestor.digest_fits(files[0], do_exclude=False)
     metaHDUList = [fits.open(files[0])] #list of HDULists #META
 
@@ -154,7 +155,7 @@ def get_optical_psf(expid, aos=False):
 
     fit_i = jamierod_results.loc[expid]
 
-    #making rzero larger
+    #making rzero larger, among other things
     misalignment = {'z04d': fit_i['z04d'], 'z04x': fit_i['z04x'], 'z04y': fit_i['z04y'],
                     'z05d': fit_i['z05d'], 'z05x': fit_i['z05x'], 'z05y': fit_i['z05y'],
                     'z06d': fit_i['z06d'], 'z06x': fit_i['z06x'], 'z06y': fit_i['z06y'],
@@ -168,7 +169,6 @@ def get_optical_psf(expid, aos=False):
     data['rzero'] = misalignment['rzero']
     optPSFStamps, model= WF.draw_psf(data, misalignment=misalignment)
 
-    #TODO np.array(full_data)?
     #optPSFStamps is a numpy data cube
     #full_data is data frame including vignettes of the stars
     return optPSFStamps, metaHDUList
@@ -177,7 +177,7 @@ if __name__ == '__main__':
 #admittedly lazy test.
     from sys import argv
     expid = int(argv[1])
-    psf, metaHDUList = getOpticalPSF(expid)
+    psf, metaHDUList = get_optical_psf(expid)
     print(psf.shape)
 
 
