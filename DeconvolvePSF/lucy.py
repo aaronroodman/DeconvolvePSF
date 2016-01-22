@@ -105,8 +105,8 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         Myy = image_moments['Myy'][0] - PSF_moments['Myy'][0]
         Mxy = image_moments['Mxy'][0] - PSF_moments['Mxy'][0]
 
-        if any( m<0 for m in (Mxx, Myy)):
-            print Mxx, Myy, Mxy
+        #if any( m<0 for m in (Mxx, Myy)):
+        #    print Mxx, Myy, Mxy
 
         psi_r = makeGaussian(phi_tilde.shape,Mxx,Myy,Mxy)
         

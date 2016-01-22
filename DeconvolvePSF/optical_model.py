@@ -164,13 +164,13 @@ def get_optical_psf(expid, aos=False):
                     'z10d': fit_i['z10d'], 'z10x': fit_i['z10x'], 'z10y': fit_i['z10y'],
                     'rzero': fit_i['rzero']}
 
-    print(misalignment['rzero'])
+    #print(misalignment['rzero'])
     #rzero needs to be adjusted to be smaller than the stars!
-    x = 4 
+    x = .3/.14#4 
     misalignment['rzero'] = 1/(1/misalignment['rzero'] - x)
-    print(misalignment['rzero'])
+    #print(misalignment['rzero'])
 
-    print(.14*x )
+    #print(.14*x )
     
     data['rzero'] = misalignment['rzero']
     optPSFStamps, model= WF.draw_psf(data, misalignment=misalignment)

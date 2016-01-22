@@ -38,11 +38,16 @@ from lucy import deconvolve, convolve
 from subprocess import call
 from psfex import PSFEx
 from glob import glob
+import cPickle as pickle
+
+#For identifying "bad stars"
+import warnings
+warnings.filterwarnings('error')
 
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
-print 'Opts Calculated.' ,
+print 'Opts Calculated.' 
 
 vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 
@@ -53,16 +58,25 @@ for hdulist in meta_hdulist:
     #TODO Turn sliced off pixels into background estimate
 
     list_len = hdulist[2].data.shape[0]
-    vignettes[vig_idx:vig_idx+list_len] = hdulist[2].data['VIGNET'][:, 15:47, 15:47]
+    sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
+    sliced_vig[sliced_vig<-1000] = 0 #set really negative values to 0
+    sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
+    vignettes[vig_idx:vig_idx+list_len] = sliced_vig 
     vig_idx+=list_len
 
 #Calculate the atmospheric portion of the psf
 atmpsf_list = []
-for optpsf, vignette in izip(optpsf_stamps, vignettes):
+for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     #atmpsf_small,diffs,psiByIter,chi2ByIter = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
-    atmpsf_small = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= False)
     atmpsf = np.zeros((63,63))
-    atmpsf[15:47, 15:47] = atmpsf_small
+    try:
+        atmpsf_small = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= False)
+        atmpsf[15:47, 15:47] = atmpsf_small
+    except RuntimeWarning:
+       #TODO What should I do on a failure?
+        print 'Failed on %d'%idx
+        pass
+
     atmpsf_list.append(atmpsf)
 
 atmpsf_list =  np.array(atmpsf_list)
@@ -80,8 +94,8 @@ for hdulist in meta_hdulist:
     #Make new filename from old one.
     original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
     original_fname_split = original_fname.split('_')
-    original_fname_split[-1] = '_seldeconv.fits'
-    hdulist.writeto(args['outputDir']+''.join(original_fname_split), clobber = True)
+    original_fname_split[-1] = 'seldeconv.fits'
+    hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
 
 print 'Copy and write done.'
 
@@ -102,15 +116,26 @@ if not psfex_success:
     from sys import exit
     exit(1)
 
-psf_files = glob(args['outputDir']+'/*.psf')
+#Now, load in psfex's work, and reconolve with the optics portion. 
+psf_files = glob(args['outputDir']+'*.psf')
 atmpsf_list = []
-for file in psf_files[]:
+#TODO Check that files are in the same order as the hdulist
+for file, hdulist in izip(psf_files, meta_hdulist):
     pex = PSFEx(file) 
-    atmpsf_list.append(pex.get(row, column))
+    for yimage, ximage in izip((hdulist[2].data['YIMAGE'], hdulist[2].data['XIMAGE'])):
+        atmpsf_list.append(pex.get_rec(yimage, ximage))
 
 #TODO np.array(atmpsf_list)?
+#TODO what to do with these?
 stars = []
 for optpsf, atmpsf in izip(optpsf_stamps, atmpsf_list):
-    stars.append(convolve(optpsf, atmpsf)
+    stars.append(convolve(optpsf, atmpsf))
+
+pickle.dump(np.array(stars), args['outputDir']+'%s_stars.pkl'%args['expid'])
+from matplotlib import pyplot
+for star in stars:
+    im = plt.imshow(star, cmap = get_cmap('afmhot'), interpolation = 'none')
+    plt.colorbar(im)
+    plt.savefig(args['outputDir']+'%s_star.png'%args['expid'])
 
 print 'Done'
