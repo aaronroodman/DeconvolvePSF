@@ -34,8 +34,10 @@ if args['outputDir'][-1]  != '/':
 import numpy as np
 from itertools import izip
 from optical_model import get_optical_psf
-from lucy import deconvolve
+from lucy import deconvolve, convolve
 from subprocess import call
+from psfex import PSFEx
+from glob import glob
 
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
@@ -94,3 +96,21 @@ psfex_success = call(' '.join(command_list), shell = True)
 print 'PSFEx Call Successful: %s'%bool(psfex_success)
 
 #TODO Clear temporary files?
+
+#no use continuing if the psfex call failed.
+if not psfex_success:
+    from sys import exit
+    exit(1)
+
+psf_files = glob(args['outputDir']+'/*.psf')
+atmpsf_list = []
+for file in psf_files[]:
+    pex = PSFEx(file) 
+    atmpsf_list.append(pex.get(row, column))
+
+#TODO np.array(atmpsf_list)?
+stars = []
+for optpsf, atmpsf in izip(optpsf_stamps, atmpsf_list):
+    stars.append(convolve(optpsf, atmpsf)
+
+print 'Done'
