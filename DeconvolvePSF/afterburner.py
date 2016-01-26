@@ -44,6 +44,8 @@ import cPickle as pickle
 import warnings
 warnings.filterwarnings('error')
 
+print 'Starting.'
+
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
@@ -76,6 +78,7 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
        #TODO What should I do on a failure?
         print 'Failed on %d'%idx
         pass
+        
 
     atmpsf_list.append(atmpsf)
 
@@ -103,11 +106,14 @@ print 'Copy and write done.'
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
 #TODO This is gonna run on all *.fits in the outputdir. If the user doesn't want that uh... then what?
+#TODO Actaully want to call on just the ones with this expid
 command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]
-#If shell != True, the wildcard won't work
-psfex_success = call(' '.join(command_list), shell = True)
+#command_list = [psfex_path, args['outputDir']+'DECam_00180489_01_seldeconv.fits', "-c", psfex_config]
 
-print 'PSFEx Call Successful: %s'%bool(psfex_success)
+#If shell != True, the wildcard won't work
+psfex_return= call(' '.join(command_list), shell = True)
+#psfex_success = True if psfex_return==0 else False
+print 'PSFEx Call Successful: %s'%psfex_success
 
 #TODO Clear temporary files?
 
@@ -122,16 +128,17 @@ atmpsf_list = []
 #TODO Check that files are in the same order as the hdulist
 for file, hdulist in izip(psf_files, meta_hdulist):
     pex = PSFEx(file) 
-    for yimage, ximage in izip((hdulist[2].data['YIMAGE'], hdulist[2].data['XIMAGE'])):
+    for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
         atmpsf_list.append(pex.get_rec(yimage, ximage))
 
 #TODO np.array(atmpsf_list)?
 #TODO what to do with these?
 stars = []
 for optpsf, atmpsf in izip(optpsf_stamps, atmpsf_list):
-    stars.append(convolve(optpsf, atmpsf))
+    print optpsf.shape, atmpsf.shape
+    stars.append(convolve(optpsf[1:30, 1:30], atmpsf))
 
-pickle.dump(np.array(stars), args['outputDir']+'%s_stars.pkl'%args['expid'])
+pickle.dump(np.array(stars), open(args['outputDir']+'%s_stars.pkl'%args['expid'], 'w'))
 from matplotlib import pyplot
 for star in stars:
     im = plt.imshow(star, cmap = get_cmap('afmhot'), interpolation = 'none')
