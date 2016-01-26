@@ -55,7 +55,8 @@ vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 
 #extract star vignettes from the hdulists
 vig_idx=0
-for hdulist in meta_hdulist:
+hdu_lengths = np.zeros((62,))
+for ccd_num, hdulist in enumerate(meta_hdulist):
     #TODO Check for off by one errors and centering.
     #TODO Turn sliced off pixels into background estimate
 
@@ -65,7 +66,10 @@ for hdulist in meta_hdulist:
     sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
     vignettes[vig_idx:vig_idx+list_len] = sliced_vig 
     vig_idx+=list_len
-
+    vig_shape = hdulist[2].data['VIGNET'][0].shape
+    print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
+    hdu_lengths[ccd_num] = list_len
+'''
 #Calculate the atmospheric portion of the psf
 atmpsf_list = []
 for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
@@ -83,9 +87,9 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     atmpsf_list.append(atmpsf)
 
 atmpsf_list =  np.array(atmpsf_list)
-
+'''
 print 'Deconv done.'
-
+'''
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 atmpsf_idx =0
@@ -99,9 +103,11 @@ for hdulist in meta_hdulist:
     original_fname_split = original_fname.split('_')
     original_fname_split[-1] = 'seldeconv.fits'
     hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
-
+'''
 print 'Copy and write done.'
 
+
+'''
 #call psfex
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
@@ -121,22 +127,31 @@ print 'PSFEx Call Successful: %s'%psfex_success
 if not psfex_success:
     from sys import exit
     exit(1)
-
+'''
 #Now, load in psfex's work, and reconolve with the optics portion. 
 psf_files = glob(args['outputDir']+'*.psf')
 atmpsf_list = []
 #TODO Check that files are in the same order as the hdulist
-for file, hdulist in izip(psf_files, meta_hdulist):
-    pex = PSFEx(file) 
+for file, hdulist in  izip(psf_files, meta_hdulist):
+    pex = PSFEx(file)
     for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
         atmpsf_list.append(pex.get_rec(yimage, ximage))
+
 
 #TODO np.array(atmpsf_list)?
 #TODO what to do with these?
 stars = []
-for optpsf, atmpsf in izip(optpsf_stamps, atmpsf_list):
+for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
     print optpsf.shape, atmpsf.shape
-    stars.append(convolve(optpsf[1:30, 1:30], atmpsf))
+    try:
+        stars.append(convolve(optpsf[1:30, 1:30], atmpsf))
+    except ValueError:
+        for ccd_num, hdu_len in enumerate( hdu_lengths) :
+            if hdu_len > idx:
+                print 'Failed on CCD %d Image %d'%(ccd_num, idx)
+            else:
+                idx-=hdu_len
+        raise
 
 pickle.dump(np.array(stars), open(args['outputDir']+'%s_stars.pkl'%args['expid'], 'w'))
 from matplotlib import pyplot as plt
