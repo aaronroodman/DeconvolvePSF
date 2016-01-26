@@ -112,7 +112,7 @@ command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]
 
 #If shell != True, the wildcard won't work
 psfex_return= call(' '.join(command_list), shell = True)
-#psfex_success = True if psfex_return==0 else False
+psfex_success = True if psfex_return==0 else False
 print 'PSFEx Call Successful: %s'%psfex_success
 
 #TODO Clear temporary files?
@@ -139,9 +139,9 @@ for optpsf, atmpsf in izip(optpsf_stamps, atmpsf_list):
     stars.append(convolve(optpsf[1:30, 1:30], atmpsf))
 
 pickle.dump(np.array(stars), open(args['outputDir']+'%s_stars.pkl'%args['expid'], 'w'))
-from matplotlib import pyplot
+from matplotlib import pyplot as plt
 for star in stars:
-    im = plt.imshow(star, cmap = get_cmap('afmhot'), interpolation = 'none')
+    im = plt.imshow(star, cmap = plt.get_cmap('afmhot'), interpolation = 'none')
     plt.colorbar(im)
     plt.savefig(args['outputDir']+'%s_star.png'%args['expid'])
 
