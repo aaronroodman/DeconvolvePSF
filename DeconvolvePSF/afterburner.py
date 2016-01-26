@@ -148,7 +148,8 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
     except ValueError:
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > idx:
-                print 'Failed on CCD %d Image %d'%(ccd_num, idx)
+                print 'Failed on CCD %d Image %d'%(ccd_num+1, idx)
+                break
             else:
                 idx-=hdu_len
         raise
