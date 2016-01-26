@@ -135,16 +135,24 @@ atmpsf_list = []
 for file, hdulist in  izip(psf_files, meta_hdulist):
     pex = PSFEx(file)
     for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
-        atmpsf_list.append(pex.get_rec(yimage, ximage))
+        atmpsf = np.zeros((32,32))
+        #psfex has a tendency to return images of weird and varying sizes
+        #This scheme ensures that they will all be the same 32x32 by zero padding
+        #assumes the images are square and smaller than 32x32
+        #Proof god is real and hates observational astronomers.
+        atmpsf_small = pex.get_rec(yimage, ximage)
+        atm_shape = atmpsf_small.shape[0] #assumed to be square
+        pad_amount = (32-atmpsf_small.shape[0])/2
+        atmpsf[pad_amount:32-(pad_amount+pad_amount%2),pad_amount:32-(pad_amount+pad_amount%2) ] = atmpsf_small
+        atmpsf_list.append(atmpsf)
 
 
-#TODO np.array(atmpsf_list)?
-#TODO what to do with these?
-stars = []
+atmpsf_list = np.array(atmpsf_list)
+
+stars = []#TODO what to do with these
 for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
-    print optpsf.shape, atmpsf.shape
     try:
-        stars.append(convolve(optpsf[1:30, 1:30], atmpsf))
+        stars.append(convolve(optpsf, atmpsf))
     except ValueError:
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > idx:
