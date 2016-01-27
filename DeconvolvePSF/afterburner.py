@@ -12,6 +12,7 @@ the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 
 #TODO Details on actually running the module.
 '''
+#TODO Global: add this file and new ones to __init__.py
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
 
