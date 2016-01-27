@@ -139,7 +139,7 @@ for file, hdulist in  izip(psf_files, meta_hdulist):
         #This scheme ensures that they will all be the same 32x32 by zero padding
         #assumes the images are square and smaller than 32x32
         #Proof god is real and hates observational astronomers.
-        atmpsf_small = pex.get_rec(yimage, ximage)
+        atmpsf_small = pex.get_rec(ximage, yimage)
         atm_shape = atmpsf_small.shape[0] #assumed to be square
         pad_amount = (32-atmpsf_small.shape[0])/2
         atmpsf[pad_amount:32-(pad_amount+atm_shape%2),pad_amount:32-(pad_amount+atm_shape%2) ] = atmpsf_small
@@ -161,7 +161,10 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
                 idx-=hdu_len
         raise
 
-pickle.dump(np.array(stars), open(args['outputDir']+'%s_stars.pkl'%args['expid'], 'w'))
+np.savetxt(args['outputDir']+'%s_stars.pkl'%args['expid'], np.array(stars), delimiter=',')
+np.savetxt(args['outputDir']+'%s_opt.pkl'%args['expid'], optpsf_stamps, delimiter=',')
+np.savetxt(args['outputDir']+'%s_atm.pkl'%args['expid'], atmpsf_list, delimiter=',')
+
 '''
 from matplotlib import pyplot as plt
 for star in stars:
