@@ -24,12 +24,24 @@ parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
 args = vars(parser.parse_args())
 
 #Ensure provided dir exists
-from os import path
+from os import path, mkdir
 if not path.isdir(args['outputDir']):
     raise IOError("The directory %s does not exist."%args['outputDir'])
 
 if args['outputDir'][-1]  != '/':
     args['outputDir']+='/'
+
+#Make new dir to store files from this run
+#TODO what to do if raises error
+if not path.isdir(args['outputDir']+'00%d/'%args['expid']):
+    try:
+        mkdir(args['outputDir']+'00%d/'%args['expid'])
+    except OSError:
+        print 'Failed making directory; using original output directory.'
+    else:
+        args['outputDir']+='00%d/'%args['expid']
+
+
 
 import numpy as np
 from itertools import izip
