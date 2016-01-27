@@ -41,6 +41,8 @@ if not path.isdir(args['outputDir']+'00%d/'%args['expid']):
         print 'Failed making directory; using original output directory.'
     else:
         args['outputDir']+='00%d/'%args['expid']
+else:
+    args['outputDir']+='00%d/'%args['expid']
 
 
 
