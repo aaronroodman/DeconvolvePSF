@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#@Author: Chris Davis
 #NOTE I took this function from ki-ls, and am modifying it to return the models I need.
 
 """
@@ -16,6 +17,12 @@ import numpy as np
 from os import path, makedirs
 from glob import glob
 from astropy.io import fits
+
+from WavefrontPSF.psf_interpolator import Mesh_Interpolator
+from WavefrontPSF.digestor import Digestor
+from WavefrontPSF.psf_evaluator import Moment_Evaluator
+from WavefrontPSF.donutengine import DECAM_Model_Wavefront
+
 
 KILS = True
 if KILS:
@@ -69,27 +76,6 @@ else:
 ###############################################################################
 def get_optical_psf(expid, aos=False):
 
-    #TODO move up top?
-    from WavefrontPSF.psf_interpolator import Mesh_Interpolator
-    from WavefrontPSF.wavefront import Wavefront
-    from WavefrontPSF.digestor import Digestor
-    from WavefrontPSF.psf_evaluator import Moment_Evaluator
-    from WavefrontPSF.donutengine import DECAM_Model_Wavefront
-
-
-
-    medsubkeys = ['e0', 'e1', 'e2', 'E1norm', 'E2norm', 'delta1', 'delta2', 'zeta1', 'zeta2']
-
-    rows = ['e0', 'e0_medsub',
-            'e1', 'e1_medsub',
-            'e2', 'e2_medsub',
-            'E1norm', 'E1norm_medsub',
-            'E2norm', 'E2norm_medsub',
-            'delta1', 'delta1_medsub',
-            'delta2', 'delta2_medsub',
-            'zeta1', 'zeta1_medsub',
-            'zeta2', 'zeta2_medsub']
-
     # set up objects. make sure I get the right mesh
     digestor = Digestor()
     PSF_Evaluator = Moment_Evaluator()
@@ -98,8 +84,6 @@ def get_optical_psf(expid, aos=False):
 
     # This will be our main wavefront
     WF = DECAM_Model_Wavefront(PSF_Interpolator=PSF_Interpolator)
-    # let's create a Wavefront object for the data
-    WF_data = Wavefront(PSF_Interpolator=None, PSF_Evaluator=PSF_Evaluator)
 
     # premake coordinate list
     coords = []
