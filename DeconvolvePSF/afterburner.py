@@ -34,6 +34,7 @@ if args['outputDir'][-1]  != '/':
 
 #Make new dir to store files from this run
 #TODO what to do if raises error
+#TODO more tight construction?
 if not path.isdir(args['outputDir']+'00%d/'%args['expid']):
     try:
         mkdir(args['outputDir']+'00%d/'%args['expid'])
