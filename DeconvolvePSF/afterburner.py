@@ -143,7 +143,7 @@ for file, hdulist in  izip(psf_files, meta_hdulist):
         atmpsf_small = pex.get_rec(yimage, ximage)
         atm_shape = atmpsf_small.shape[0] #assumed to be square
         pad_amount = (32-atmpsf_small.shape[0])/2
-        atmpsf[pad_amount:32-(pad_amount+pad_amount%2),pad_amount:32-(pad_amount+pad_amount%2) ] = atmpsf_small
+        atmpsf[pad_amount:32-(pad_amount+atm_shape%2),pad_amount:32-(pad_amount+atm_shape%2) ] = atmpsf_small
         atmpsf_list.append(atmpsf)
 
 
