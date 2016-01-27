@@ -67,9 +67,9 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
     vignettes[vig_idx:vig_idx+list_len] = sliced_vig 
     vig_idx+=list_len
     vig_shape = hdulist[2].data['VIGNET'][0].shape
-    print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
+    #print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
     hdu_lengths[ccd_num] = list_len
-'''
+
 #Calculate the atmospheric portion of the psf
 atmpsf_list = []
 for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
@@ -87,9 +87,9 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     atmpsf_list.append(atmpsf)
 
 atmpsf_list =  np.array(atmpsf_list)
-'''
+
 print 'Deconv done.'
-'''
+
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 atmpsf_idx =0
@@ -103,18 +103,17 @@ for hdulist in meta_hdulist:
     original_fname_split = original_fname.split('_')
     original_fname_split[-1] = 'seldeconv.fits'
     hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
-'''
+
 print 'Copy and write done.'
 
 
-'''
+
 #call psfex
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
 #TODO This is gonna run on all *.fits in the outputdir. If the user doesn't want that uh... then what?
 #TODO Actaully want to call on just the ones with this expid
 command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]
-#command_list = [psfex_path, args['outputDir']+'DECam_00180489_01_seldeconv.fits', "-c", psfex_config]
 
 #If shell != True, the wildcard won't work
 psfex_return= call(' '.join(command_list), shell = True)
@@ -127,7 +126,7 @@ print 'PSFEx Call Successful: %s'%psfex_success
 if not psfex_success:
     from sys import exit
     exit(1)
-'''
+
 #Now, load in psfex's work, and reconolve with the optics portion. 
 psf_files = glob(args['outputDir']+'*.psf')
 atmpsf_list = []
@@ -163,10 +162,11 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
         raise
 
 pickle.dump(np.array(stars), open(args['outputDir']+'%s_stars.pkl'%args['expid'], 'w'))
+'''
 from matplotlib import pyplot as plt
 for star in stars:
     im = plt.imshow(star, cmap = plt.get_cmap('afmhot'), interpolation = 'none')
     plt.colorbar(im)
     plt.savefig(args['outputDir']+'%s_star.png'%args['expid'])
-
+'''
 print 'Done'
