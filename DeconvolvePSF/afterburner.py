@@ -52,7 +52,6 @@ from lucy import deconvolve, convolve
 from subprocess import call
 from psfex import PSFEx
 from glob import glob
-import cPickle as pickle
 
 #For identifying "bad stars"
 import warnings
@@ -74,6 +73,7 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
     #TODO Turn sliced off pixels into background estimate
 
     list_len = hdulist[2].data.shape[0]
+    '''
     sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
     sliced_vig[sliced_vig<-1000] = 0 #set really negative values to 0; it's a mask
     sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
@@ -81,8 +81,9 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
     vig_idx+=list_len
     vig_shape = hdulist[2].data['VIGNET'][0].shape
     #print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
+    '''
     hdu_lengths[ccd_num] = list_len
-
+'''
 #Calculate the atmospheric portion of the psf
 resid_list = []
 bad_stars = set() #keep idx's of bad stars
@@ -109,11 +110,12 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     resid_list.append(resid)
 
 resid_list =  np.array(resid_list)
-
+'''
 print 'Deconv done.'
 
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
+'''
 resid_idx =0
 for hdulist in meta_hdulist:
     list_len = hdulist[2].data.shape[0]
@@ -125,9 +127,9 @@ for hdulist in meta_hdulist:
     original_fname_split = original_fname.split('_')
     original_fname_split[-1] = 'seldeconv.fits'
     hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
-
+'''
 print 'Copy and write done.'
-
+'''
 #call psfex
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
@@ -143,7 +145,7 @@ print 'PSFEx Call Successful: %s'%psfex_success
 if not psfex_success:
     from sys import exit
     exit(1)
-
+'''
 #Now, load in psfex's work, and reconolve with the optics portion. 
 psf_files = glob(args['outputDir']+'*.psf')
 atmpsf_list = []
@@ -178,6 +180,8 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
             else:
                 idx-=hdu_len
         raise
+
+print np.array(stars)
 
 np.savetxt(args['outputDir']+'%s_stars.npy'%args['expid'], np.array(stars), delimiter=',')
 np.savetxt(args['outputDir']+'%s_opt.npy'%args['expid'], optpsf_stamps, delimiter=',')
