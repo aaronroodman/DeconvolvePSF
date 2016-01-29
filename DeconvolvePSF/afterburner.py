@@ -54,8 +54,8 @@ from psfex import PSFEx
 from glob import glob
 
 #For identifying "bad stars"
-import warnings
-warnings.filterwarnings('error')
+#import warnings
+#warnings.filterwarnings('error')
 
 print 'Starting.'
 
