@@ -62,6 +62,8 @@ print 'Starting.'
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
+np.save(args['outputDir']+'%s_opt_test.npy'%args['expid'], optpsf_stamps)
+
 print 'Opts Calculated.' 
 
 vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
