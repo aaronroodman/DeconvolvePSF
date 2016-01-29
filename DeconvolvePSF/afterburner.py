@@ -62,9 +62,13 @@ print 'Starting.'
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
-#np.save(args['outputDir']+'%s_opt_test.npy'%args['expid'], optpsf_stamps)
+np.save(args['outputDir']+'%s_opt_test.npy'%args['expid'], optpsf_stamps)
+
 
 print 'Opts Calculated.' 
+
+from sys import exit
+exit(0)
 
 vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 
@@ -159,7 +163,7 @@ for file, hdulist in  izip(psf_files, meta_hdulist):
         #This scheme ensures that they will all be the same 32x32 by zero padding
         #assumes the images are square and smaller than 32x32
         #Proof god is real and hates observational astronomers.
-        atmpsf_small = pex.get_rec(ximage, yimage)
+        atmpsf_small = pex.get_rec(yimage, ximage)
         atm_shape = atmpsf_small.shape[0] #assumed to be square
         pad_amount = (32-atmpsf_small.shape[0])/2
         atmpsf[pad_amount:32-(pad_amount+atm_shape%2),pad_amount:32-(pad_amount+atm_shape%2) ] = atmpsf_small
