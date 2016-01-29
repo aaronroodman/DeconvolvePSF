@@ -117,7 +117,7 @@ def get_optical_psf(expid, aos=False):
     # load up data
     expid_path = '{0:08d}/{1:08d}'.format(expid - expid % 1000, expid)
     data_directory = base_directory + expid_path
-    files = glob(data_directory + '/*{0}'.format('_selpsfcat.fits'))
+    files = sorted(glob(data_directory + '/*{0}'.format('_selpsfcat.fits')))
 
     # load up all the data from an exposure. Unfortunately, pandas is stupid and
     # can't handle the vignet format, so we don't load those up

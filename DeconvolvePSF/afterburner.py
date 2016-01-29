@@ -62,7 +62,7 @@ print 'Starting.'
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(args['expid'])
 
-np.save(args['outputDir']+'%s_opt_test.npy'%args['expid'], optpsf_stamps)
+#np.save(args['outputDir']+'%s_opt_test.npy'%args['expid'], optpsf_stamps)
 
 print 'Opts Calculated.' 
 
@@ -149,7 +149,7 @@ if not psfex_success:
     exit(1)
 
 #Now, load in psfex's work, and reconolve with the optics portion. 
-psf_files = glob(args['outputDir']+'*.psf')
+psf_files = sorted(glob(args['outputDir']+'*.psf'))
 atmpsf_list = []
 for file, hdulist in  izip(psf_files, meta_hdulist):
     pex = PSFEx(file)
