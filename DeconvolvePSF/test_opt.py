@@ -5,7 +5,7 @@ from optical_model import get_optical_psf
 from optical_model_mod import get_optical_psf_2
 import numpy as np
 
-expid = 180489
+expid = 145329
 
 outputDir = '/u/ki/swmclau2/des/TestOut/'
 
