@@ -148,9 +148,11 @@ def get_optical_psf_2(expid, aos=False):
                     'rzero': fit_i['rzero']}
 
     print(misalignment['z04d'])#focus
-    misalignment['z04d'] = .5 
+    misalignment['z04d'] = .75
     print(misalignment['z05d'])
-    misalignment['z05d'] = .5
+    misalignment['z05d'] = .75
+    print(misalignment['z05x'])
+    misalignment['z05x'] = .3
 
     #print(misalignment['rzero'])
     #rzero needs to be adjusted to be smaller than the stars!
