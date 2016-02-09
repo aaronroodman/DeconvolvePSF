@@ -106,6 +106,9 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         Mxy = image_moments['Mxy'][0] - PSF_moments['Mxy'][0]
 
         psi_r = makeGaussian(phi_tilde.shape,Mxx,Myy,Mxy)
+        #sometimes this fails if the observation is too non-gaussian
+        if np.any(np.logical_or( np.isinf(psi_r), np.isnan(psi_r))):
+            psi_r = phi_tilde #trying this out; otherwise we'll just have to raise errors/hell
         
     else:
         # initial guess
@@ -117,6 +120,11 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
     # normalize starting guess
     psi_r = psi_r / np.sum(psi_r)
+    
+    #TODO Maybe this should be an error instead of a warning.
+    if np.any(np.isnan(psi_r)):
+        raise RuntimeWarning("NaN in initial guess, skip this value. ")
+                
 
     # mask image too
     if mask != None:

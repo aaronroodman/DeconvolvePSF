@@ -14,6 +14,7 @@ the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 '''
 
 #TODO I like to do imports after argparse, chris put these before. Probably not a big difference
+#The difference is fairly significant. -h is slow with all these imports before it.
 from WavefrontPSF.psf_interpolator import Mesh_Interpolator
 from WavefrontPSF.digestor import Digestor
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
@@ -112,6 +113,18 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     resid = np.zeros((63,63))
     try:
         resid_small = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= False)
+
+        if np.any(np.isnan(resid_small)):
+            from matplotlib import pyplot as plt
+            plt.subplot(131)
+            plt.imshow(optpsf)
+            plt.subplot(132)
+            plt.imshow(vignette)
+            plt.subplot(133)
+            plt.imshow(resid_small)
+
+            plt.show()
+
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail
         bad_stars.add(idx)
@@ -120,12 +133,11 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
 
         cp_idx = idx#still need this, since we're going to keep iterating.
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
-            if hdu_len > idx:
+            if hdu_len > cp_idx:
                 print 'Deconvolve failed on CCD %d Image %d'%(ccd_num+1, cp_idx)
                 break
             else:
                 cp_idx-=hdu_len
-        pass
 
     resid_list.append(resid)
 
