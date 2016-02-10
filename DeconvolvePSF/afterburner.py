@@ -82,7 +82,6 @@ optpsf_stamps, meta_hdulist = get_optical_psf(expid)
 
 np.save(args['outputDir']+'%s_opt_test.npy'%expid, optpsf_stamps)
 
-
 print 'Opts Calculated.'
 
 vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
@@ -245,7 +244,7 @@ if kils:
     # these give the deconvolved stars
     #TODO change this to the passed in output?
     out_base = '/nfs/slac/g/ki/ki18/des/swmclau2/DeconvOutput/'
-    out_base = '/nfs/slac/g/ki/ki18/des/cpd/DeconvOutput/'
+    #out_base = '/nfs/slac/g/ki/ki18/des/cpd/DeconvOutput/'
     deconv_dir = out_base + '{0:08d}'.format(expid)
     # not sure what stars these really are? the combined psfex + deconv?
     deconvmodel_loc = out_base + '{0:08d}/{0}_stars.npy'.format(expid)
