@@ -84,35 +84,6 @@ def get_optical_psf(expid, aos=False):
     # This will be our main wavefront
     WF = DECAM_Model_Wavefront(PSF_Interpolator=PSF_Interpolator)
 
-    # premake coordinate list
-    coords = []
-    for num_bins in xrange(6):
-        # create coordinates
-        x = []
-        y = []
-        if num_bins >= 2:
-            num_bins_make = num_bins + (num_bins-1)
-        else:
-            num_bins_make = num_bins
-        for key in WF.decaminfo.infoDict.keys():
-            if 'F' in key:
-                continue
-            xi, yi = WF.decaminfo.getBounds(key, num_bins_make)
-            xi = np.array(xi)
-            xi = 0.5 * (xi[1:] + xi[:-1])
-            yi = np.array(yi)
-            yi = 0.5 * (yi[1:] + yi[:-1])
-            xi, yi = np.meshgrid(xi, yi)
-            xi = xi.flatten()
-            yi = yi.flatten()
-            x += list(xi)
-            y += list(yi)
-        x = np.array(x)
-        y = np.array(y)
-        coords_i = pd.DataFrame({'x': x, 'y': y})
-        coords.append(coords_i)
-
-
     # load up data
     expid_path = '{0:08d}/{1:08d}'.format(expid - expid % 1000, expid)
     data_directory = base_directory + expid_path

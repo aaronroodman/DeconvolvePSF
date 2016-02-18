@@ -80,7 +80,7 @@ print 'Starting.'
 #get optical PSF
 optpsf_stamps, meta_hdulist = get_optical_psf(expid)
 
-np.save(args['outputDir']+'%s_opt_test.npy'%expid, optpsf_stamps)
+#np.save(args['outputDir']+'%s_opt_test.npy'%expid, optpsf_stamps)
 
 print 'Opts Calculated.'
 
@@ -99,7 +99,7 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
     sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
     vignettes[vig_idx:vig_idx+list_len] = sliced_vig 
     vig_idx+=list_len
-    vig_shape = hdulist[2].data['VIGNET'][0].shape
+    #vig_shape = hdulist[2].data['VIGNET'][0].shape
     #print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
 
     hdu_lengths[ccd_num] = list_len
@@ -111,18 +111,10 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     #resid_small,diffs,psiByIter,chi2ByIter = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     resid = np.zeros((63,63))
     try:
-        resid_small = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= False)
-
-        if np.any(np.isnan(resid_small)):
-            from matplotlib import pyplot as plt
-            plt.subplot(131)
-            plt.imshow(optpsf)
-            plt.subplot(132)
-            plt.imshow(vignette)
-            plt.subplot(133)
-            plt.imshow(resid_small)
-
-            plt.show()
+        #this makes initial guess be all ones
+        #TODO consider vignette as original guess, result sorta depends on noise
+        background = vignette[vignette< vignette.mean()+vignette.std()]
+        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background,convergence=1e-4,niterations=50, extra= False)
 
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail

@@ -90,25 +90,9 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
     # if no initial guess, make one from 2nd moments of input image - PSF
     if psi_0 == None:
-        # calculate Moments of psi_tilde and PSF, subtract and
-
-        # calculate moments
-        evaluator = Moment_Evaluator()
-
-        # try a better starting guess - based on our knowledge of the PSF
-        image_moments = evaluator(phi_tilde)
-        PSF_moments = evaluator(PSF)
-
-        #TODO what to do if makeGaussian throws an error?
-        # subtract 2nd order moments in quadrature, use an object with the difference
-        Mxx = image_moments['Mxx'][0] - PSF_moments['Mxx'][0]
-        Myy = image_moments['Myy'][0] - PSF_moments['Myy'][0]
-        Mxy = image_moments['Mxy'][0] - PSF_moments['Mxy'][0]
-
-        psi_r = makeGaussian(phi_tilde.shape,Mxx,Myy,Mxy)
-        #sometimes this fails if the observation is too non-gaussian
-        if np.any(np.logical_or( np.isinf(psi_r), np.isnan(psi_r))):
-            psi_r = phi_tilde #trying this out; otherwise we'll just have to raise errors/hell
+        #Turns out Gaussians are a bad initial guess, still unclear as to why
+        #Can use the image itself as the initial guess, also works fine.
+        psi_r = np.ones(PSF.shape)
         
     else:
         # initial guess
