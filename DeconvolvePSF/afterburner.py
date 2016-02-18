@@ -114,7 +114,7 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
         #this makes initial guess be all ones
         #TODO consider vignette as original guess, result sorta depends on noise
         background = vignette[vignette< vignette.mean()+vignette.std()]
-        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background,convergence=1e-4,niterations=50, extra= False)
+        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-4,niterations=50, extra= False)
 
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail
