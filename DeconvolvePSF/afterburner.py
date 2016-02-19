@@ -114,7 +114,7 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
         #this makes initial guess be all ones
         #TODO consider vignette as original guess, result sorta depends on noise
         background = vignette[vignette< vignette.mean()+vignette.std()]
-        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background,convergence=1e-4,niterations=50, extra= False)
+        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-4,niterations=50, extra= False)
 
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail
@@ -294,6 +294,8 @@ psf_files = sorted(glob(data_directory + '/*{0}'.format('psfcat_validation_subtr
 
 psfex_list = []
 psfex_flipped_list = []
+
+#TODO Inconcisitent definition of stars!
 stars = []
 #TODO Check that files are in the same order as the hdulist
 for psfex_file, hdulist in izip(psf_files, meta_hdulist):

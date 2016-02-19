@@ -89,7 +89,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     PSF = PSF / np.sum(PSF)
 
     # if no initial guess, make one from 2nd moments of input image - PSF
-    if psi_0 == None:
+    if psi_0 is None:
         #Turns out Gaussians are a bad initial guess, still unclear as to why
         #Can use the image itself as the initial guess, also works fine.
         psi_r = np.ones(PSF.shape)
@@ -99,7 +99,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         psi_r = np.abs(psi_0)
 
     # mask starting guess
-    if mask != None:    
+    if mask is not None:
         psi_r = psi_r * mask
 
     # normalize starting guess
@@ -111,7 +111,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
                 
 
     # mask image too
-    if mask != None:
+    if mask is not None:
         phi_tilde = phi_tilde * mask
         
     # find normalization for measured image
@@ -168,6 +168,22 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     #TODO rescale deconv by flux
 
     # we are done!
+
+    #check to see if the deconv failed
+    evaluator = Moment_Evaluator()
+
+    resid_moments = evaluator(psi_rplus1)
+
+    #TODO what to do if makeGaussian throws an error?
+    # subtract 2nd order moments in quadrature, use an object with the difference
+    Mxx = resid_moments['Mxx'][0]
+    Myy = resid_moments['Myy'][0]
+    Mxy = resid_moments['Mxy'][0]
+
+    #print Mxx, Myy, Mxy
+    if any(np.isnan(x) for x in [Mxx, Myy, Mxy]):
+        raise RuntimeWarning("Deconvolution Failed.")
+
     if extra:
         return psi_rplus1,diffByIter,psiByIter,chi2ByIter
     else:
