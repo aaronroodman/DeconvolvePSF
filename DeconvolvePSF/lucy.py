@@ -184,6 +184,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     if any(np.isnan(x) for x in [Mxx, Myy, Mxy]):
         raise RuntimeWarning("Deconvolution Failed.")
 
+
     if extra:
         return psi_rplus1,diffByIter,psiByIter,chi2ByIter
     else:
