@@ -156,8 +156,9 @@ print 'Copy and write done.'
 #call psfex
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
+outcat_name = args['outputDir'] + '%d_outcat.cat'%expid
 
-command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config]
+command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config, "-OUTCAT_NAME",outcat_name ]
 
 #If shell != True, the wildcard won't work
 psfex_return= call(' '.join(command_list), shell = True)
@@ -217,7 +218,9 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
 np.save(args['outputDir']+'%s_stars.npy'%expid, np.array(stars))
 np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps)
 np.save(args['outputDir']+'%s_atm.npy'%expid, atmpsf_list)
-np.save(args['outputDir']+'%s_stars_minus_opt.npy'%expid, resid_list)
+np.save(args['outputDir']+'%d_stars_minus_opt.npy'%expid, resid_list)
+
+np.save(args['outputDir'] + '%s_bad_star_idxs.npy', np.array(sorted(list(bad_stars))) )
 
 print 'Done'
 
