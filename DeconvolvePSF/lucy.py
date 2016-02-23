@@ -128,7 +128,8 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
         # calculate next approximation to psi
         phi_r = beta*convolve(psi_r,PSF) + mu0
-        psi_rplus1 = psi_r * convolveStar((phi_tilde+mu0)/phi_r,PSF)
+        #fixing a possible bug in noisy deocnv
+        psi_rplus1 = psi_r * convolveStar(beta*(phi_tilde)/phi_r,PSF)
 
         # mask the next iteration
         if mask != None:
