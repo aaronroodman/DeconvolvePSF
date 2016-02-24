@@ -151,7 +151,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         # also calculate how close to a solution we are
         chi2 = calcChi2(PSF,psi_rplus1,phi_tilde,beta,mu0)
         chi2ByIter.append(chi2)
-        if chi2<chi2Level:
+        if 0<chi2<chi2Level:
             continueTheLoop = False
         
         # check for Chi2 level
@@ -184,7 +184,6 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     #print Mxx, Myy, Mxy
     if any(np.isnan(x) for x in [Mxx, Myy, Mxy]):
         raise RuntimeWarning("Deconvolution Failed.")
-
 
     if extra:
         return psi_rplus1,diffByIter,psiByIter,chi2ByIter
