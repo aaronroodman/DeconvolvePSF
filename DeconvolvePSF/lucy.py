@@ -147,6 +147,9 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
             diffByIter.append(diff)
             if diff<convergence:
                 continueTheLoop = False
+            elif len(diffByIter) > 2 and diffByIter[-1] > diffByIter[-2] > diffByIter[-3]: #diverging!
+                #raise RuntimeWarning("Deconvolution Diverged.")
+                pass
 
         # also calculate how close to a solution we are
         chi2 = calcChi2(PSF,psi_rplus1,phi_tilde,beta,mu0)
