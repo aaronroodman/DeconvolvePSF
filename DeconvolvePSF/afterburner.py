@@ -145,7 +145,7 @@ print 'Deconv done.'
 #make good stars
 good_stars = {}
 for ccd, bs in bad_stars.iteritems():
-    good_stars[ccd] = np.array(set(xrange(hdu_lengths[ccd-1])-bs))
+    good_stars[ccd] = np.array(set(xrange(int(hdu_lengths[ccd-1]))-bs))
     good_stars[ccd].sort()
 
 good_stars_1d = np.array(set( xrange(optpsf_stamps.shape[0]) ) - bad_stars_1d)
