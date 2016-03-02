@@ -21,6 +21,8 @@ from WavefrontPSF.psf_evaluator import Moment_Evaluator
 from WavefrontPSF.donutengine import DECAM_Model_Wavefront
 from glob import glob
 from itertools import izip
+from collections import defaultdict
+from copy import deepcopy
 from psfex import PSFEx
 import pandas as pd
 from astropy.io import fits
@@ -78,6 +80,7 @@ warnings.filterwarnings('error')
 print 'Starting.'
 
 #get optical PSF
+#TODO change indexing scheme from one long list to a ccd based one?
 optpsf_stamps, meta_hdulist = get_optical_psf(expid)
 
 #np.save(args['outputDir']+'%s_opt_test.npy'%expid, optpsf_stamps)
@@ -88,7 +91,7 @@ vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 
 #extract star vignettes from the hdulists
 vig_idx=0
-hdu_lengths = np.zeros((62,))
+hdu_lengths = np.zeros((62,)) #TODO CCDs indexed with 0's here
 for ccd_num, hdulist in enumerate(meta_hdulist):
     #TODO Turn sliced off pixels into background estimate
 
@@ -106,7 +109,9 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
 
 #Calculate the atmospheric portion of the psf
 resid_list = []
-bad_stars = set() #keep idx's of bad stars
+#TODO a set of (ccd, idx) tuples or a dict would be more helpful
+bad_stars = defaultdict(set) #keep idx's of bad stars
+bad_stars_1d = set()
 for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     #resid_small,diffs,psiByIter,chi2ByIter = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
     resid = np.zeros((63,63))
@@ -118,38 +123,58 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
 
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail
-        bad_stars.add(idx)
+        bad_stars_1d.add(idx)
         #TODO check how this mask works
         resid = np.ones((63,63))*-9999 #forcing a mask
 
         cp_idx = idx#still need this, since we're going to keep iterating.
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > cp_idx:
+                bad_stars[ccd_num+1].add(cp_idx)#TODO indexing is confusing. CCDs i have as 1 based, but idx's i have as 0.
                 print 'Deconvolve failed on CCD %d Image %d'%(ccd_num+1, cp_idx)
                 break
             else:
                 cp_idx-=hdu_len
 
-    resid_list.append(resid)
+    resid_list.append(resid)#TODO do this in 2D ccd, idx rahter than idx?
 
 resid_list =  np.array(resid_list)
 
 print 'Deconv done.'
 
+#make good stars
+good_stars = {}
+for ccd, bs in bad_stars.iteritems():
+    good_stars[ccd] = np.array(set(xrange(hdu_lengths[ccd-1])-bs))
+    good_stars[ccd].sort()
+
+good_stars_1d = np.array(set( xrange(optpsf_stamps.shape[0]) ) - bad_stars_1d)
+good_stars_1d.sort()
+
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 
 resid_idx =0
-for hdulist in meta_hdulist:
-    list_len = hdulist[2].data.shape[0]
+meta_hdulist_new = []
+for ccd, hdulist in enumerate(meta_hdulist):
+    list_len = hdulist[2].data.shape[0] #TODO use hdu_lengths?
     hdulist[2].data['VIGNET'] = resid_list[resid_idx:resid_idx+list_len]
     resid_idx+=list_len
+
+    #make a new hdulist, removing the stars we've masked.
+    primary_table = deepcopy(hdulist[0]) #will shallow copy work?
+    imhead = deepcopy(hdulist[1])
+    objects = fits.BinTableHDU(data = hdulist[2].data[good_stars[ccd+1]], header = hdulist[2].header,\
+                               name = hdulist[2].name, uint = hdulist[2].uint)
+
+    new_hdulist = fits.HDUList(hdus = [primary_table, imhead, objects])
+    meta_hdulist_new.append(new_hdulist)
 
     #Make new filename from old one.
     original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
     original_fname_split = original_fname.split('_')
     original_fname_split[-1] = 'seldeconv.fits'
-    hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
+    new_hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
 
 print 'Copy and write done.'
 
@@ -173,7 +198,7 @@ if not psfex_success:
 #Now, load in psfex's work, and reconolve with the optics portion. 
 psf_files = sorted(glob(args['outputDir']+'*.psf'))
 atmpsf_list = []
-for file, hdulist in  izip(psf_files, meta_hdulist):
+for file, hdulist in izip(psf_files, meta_hdulist_new):
     pex = PSFEx(file)
     for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
         atmpsf = np.zeros((32,32))
@@ -201,9 +226,8 @@ for file, hdulist in  izip(psf_files, meta_hdulist):
 atmpsf_list = np.array(atmpsf_list)
 
 stars = []
-for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
-    #TODO if idx in bad_stars: continue
-    #Not sure if I should skip the bads
+for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf_list)):
+
     try:
         stars.append(convolve(optpsf, atmpsf))
     except ValueError:
@@ -215,13 +239,19 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps, atmpsf_list)):
                 idx-=hdu_len
         raise
 
+#TODO what to save?
+#Just gonna save good ones for now, for simplicity
 np.save(args['outputDir']+'%s_stars.npy'%expid, np.array(stars))
-np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps)
+np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps[good_stars_1d])
 np.save(args['outputDir']+'%s_atm.npy'%expid, atmpsf_list)
-np.save(args['outputDir']+'%d_stars_minus_opt.npy'%expid, resid_list)
+np.save(args['outputDir']+'%d_stars_minus_opt.npy'%expid, resid_list[good_stars_1d])
 
 np.save(args['outputDir'] + '%s_bad_star_idxs.npy', np.array(sorted(list(bad_stars))) )
 
+optpsf_stamps = optpsf_stamps[good_stars_1d]
+resid_list = resid_list[good_stars_1d]
+
+#TODO below here is a mess.
 print 'Done'
 
 # from matplotlib import pyplot as plt
@@ -301,7 +331,7 @@ psfex_flipped_list = []
 #TODO Inconcisitent definition of stars!
 stars = []
 #TODO Check that files are in the same order as the hdulist
-for psfex_file, hdulist in izip(psf_files, meta_hdulist):
+for psfex_file, hdulist in izip(psf_files, meta_hdulist_new):
     pex_orig = PSFEx(psfex_file)
     for yimage, ximage in izip(hdulist[2].data['YWIN_IMAGE'], hdulist[2].data['XWIN_IMAGE']):
         atmpsf_tmp = np.zeros((32,32))
