@@ -265,6 +265,7 @@ print 'Done'
 
 sample_num = 0
 kils = True
+
 if kils:
     # these give the deconvolved stars
     #TODO change this to the passed in output?
