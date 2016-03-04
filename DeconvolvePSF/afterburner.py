@@ -6,7 +6,7 @@ Arguments:
     - outputDir: the directory in which to create a subdirectory for temporary files and final outputs. 
 Requirements:
     -WavefrontPSF
-    -numpy, pandas, astropy
+    -numpy, pandas, astropy or pyfits
     -a psfex installation and python binding
 
 This module is the main module for my project for the winter quarter of 2016 in Aaron Roodman's group.
@@ -123,7 +123,7 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > cp_idx:
                 bad_stars[ccd_num+1].add(cp_idx)#TODO indexing is confusing. CCDs i have as 1 based, but idx's i have as 0.
-                print 'Deconvolve failed on CCD %d Image %d'%(ccd_num+1, cp_idx)
+                #print 'Deconvolve failed on CCD %d Image %d'%(ccd_num+1, cp_idx)
                 break
             else:
                 cp_idx-=hdu_len
