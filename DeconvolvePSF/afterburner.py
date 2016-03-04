@@ -14,7 +14,6 @@ the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 '''
 
 #TODO I like to do imports after argparse, chris put these before. Probably not a big difference
-#The difference is fairly significant. -h is slow with all these imports before it.
 from WavefrontPSF.psf_interpolator import Mesh_Interpolator
 from WavefrontPSF.digestor import Digestor
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
@@ -65,15 +64,25 @@ if not path.isdir(args['outputDir']+'00%d/'%expid):
 else:
     args['outputDir']+='00%d/'%expid
 
-# import numpy as np
-# from itertools import izip
-# from optical_model import get_optical_psf
-# from lucy import deconvolve, convolve
-# from subprocess import call
-# from psfex import PSFEx
-# from glob import glob
+#Do imports here instead of before the argparse because users will be able to acces
+#the help script without these packages instalelled, and more quickly
+from WavefrontPSF.psf_interpolator import Mesh_Interpolator
+from WavefrontPSF.digestor import Digestor
+from WavefrontPSF.psf_evaluator import Moment_Evaluator
+from WavefrontPSF.donutengine import DECAM_Model_Wavefront
+import pandas as pd
+from astropy.io import fits #TODOchange to fitsio?
+import numpy as np
+from psfex import PSFEx
+from glob import glob
+from itertools import izip
+from collections import defaultdict
+from subprocess import call
+from copy import deepcopy
+from optical_model import get_optical_psf
+from lucy import deconvolve, convolve
 
-#For identifying "bad stars"
+#TODO change warning to exception
 import warnings
 warnings.filterwarnings('error')
 
@@ -93,8 +102,6 @@ vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
 vig_idx=0
 hdu_lengths = np.zeros((62,)) #TODO CCDs indexed with 0's here
 for ccd_num, hdulist in enumerate(meta_hdulist):
-    #TODO Turn sliced off pixels into background estimate
-
     list_len = hdulist[2].data.shape[0]
 
     sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
@@ -117,14 +124,13 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
     resid = np.zeros((63,63))
     try:
         #this makes initial guess be all ones
-        #TODO consider vignette as original guess, result sorta depends on noise
         background = vignette[vignette< vignette.mean()+vignette.std()]
         resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-2,niterations=50, extra= False)
 
         resid[15:47, 15:47] = resid_small
     except RuntimeWarning: #Some will fail
         bad_stars_1d.add(idx)
-        #TODO check how this mask works
+        #TODO make the mask value a constant
         resid = np.ones((63,63))*-9999 #forcing a mask
 
         cp_idx = idx#still need this, since we're going to keep iterating.
@@ -145,10 +151,10 @@ print 'Deconv done.'
 #make good stars
 good_stars = {}
 for ccd, bs in bad_stars.iteritems():
-    good_stars[ccd] = np.array(set(xrange(int(hdu_lengths[ccd-1]))-bs))
-    good_stars[ccd].sort()
+    arr = np.array(list(set(xrange(int(hdu_lengths[ccd-1] ))) -bs))
+    good_stars[ccd] = sorted(arr) if len(arr)>0 else arr
 
-good_stars_1d = np.array(set( xrange(optpsf_stamps.shape[0]) ) - bad_stars_1d)
+good_stars_1d = np.array(list(set( xrange(optpsf_stamps.shape[0])  ) - bad_stars_1d) )
 good_stars_1d.sort()
 
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
@@ -240,7 +246,6 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf
         raise
 
 #TODO what to save?
-#Just gonna save good ones for now, for simplicity
 np.save(args['outputDir']+'%s_stars.npy'%expid, np.array(stars))
 np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps[good_stars_1d])
 np.save(args['outputDir']+'%s_atm.npy'%expid, atmpsf_list)
@@ -331,7 +336,6 @@ psfex_flipped_list = []
 
 #TODO Inconcisitent definition of stars!
 stars = []
-#TODO Check that files are in the same order as the hdulist
 for psfex_file, hdulist in izip(psf_files, meta_hdulist_new):
     pex_orig = PSFEx(psfex_file)
     for yimage, ximage in izip(hdulist[2].data['YWIN_IMAGE'], hdulist[2].data['XWIN_IMAGE']):
