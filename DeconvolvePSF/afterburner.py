@@ -153,7 +153,7 @@ for ccd, hdulist in enumerate(meta_hdulist):
     primary_table = hdulist[0].copy() #will shallow copy work?
     imhead = hdulist[1].copy()
     objects = fits.BinTableHDU(data = hdulist[2].data[good_stars[ccd+1]], header = hdulist[2].header,\
-                               name = hdulist[2].name, uint = hdulist[2].uint)
+                               name = hdulist[2].name)
 
     new_hdulist = fits.HDUList(hdus = [primary_table, imhead, objects])
     meta_hdulist_new.append(new_hdulist)
