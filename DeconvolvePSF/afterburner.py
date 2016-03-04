@@ -195,24 +195,24 @@ for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist_new)):
         #Proof god is real and hates observational astronomers.
         atmpsf_loaded = pex.get_rec(yimage, ximage)
         atm_shape = atmpsf_loaded.shape[0] #assumed to be square
-        if atm_shape < atmpsf.shape[0]:
-           pad_amount = int((atmpsf.shape[0]-atmpsf_loaded.shape[0])/2)
+        if atm_shape < atmpsf_list.shape[1]:
+           pad_amount = int((atmpsf_list.shape[1]-atmpsf_loaded.shape[0])/2)
            pad_amount_upper = pad_amount + atmpsf_loaded.shape[0]
 
            atmpsf_list[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
-        elif atm_shape > atmpsf.shape[0]:
+        elif atm_shape > atmpsf_list.shape[1]:
             # now we have to cut psf for... reasons
             # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
             center = int(atm_shape / 2)
-            lower = center - int(atmpsf.shape[0] / 2)
-            upper = lower + atmpsf.shape[0]
+            lower = center - int(atmpsf_list.shape[1] / 2)
+            upper = lower + atmpsf_list.shape[1]
             atmpsf_list[idx] = atmpsf_loaded[lower:upper, lower:upper]
 
 stars = np.array(atmpsf_list.shape[0], 32,32)
 for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf_list)):
 
     try:
-        stars[idx] = convolve(optpsf, atmpsf))
+        stars[idx] = convolve(optpsf, atmpsf)
     except ValueError:
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > idx:
