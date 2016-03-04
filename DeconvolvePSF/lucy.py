@@ -107,7 +107,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     
     #TODO Maybe this should be an error instead of a warning.
     if np.any(np.isnan(psi_r)):
-        raise RuntimeWarning("NaN in initial guess, skip this value. ")
+        raise RuntimeError("NaN in initial guess, skip this value. ")
                 
 
     # mask image too
@@ -148,7 +148,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
             if diff<convergence:
                 continueTheLoop = False
             elif len(diffByIter) > 2 and diffByIter[-1] > diffByIter[-2] > diffByIter[-3]: #diverging!
-                #raise RuntimeWarning("Deconvolution Diverged.")
+                #raise RuntimeError("Deconvolution Diverged.")
                 pass
 
         # also calculate how close to a solution we are
@@ -186,7 +186,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
     #print Mxx, Myy, Mxy
     if any(np.isnan(x) for x in [Mxx, Myy, Mxy]):
-        raise RuntimeWarning("Deconvolution Failed.")
+        raise RuntimeError("Deconvolution Failed.")
 
     if extra:
         return psi_rplus1,diffByIter,psiByIter,chi2ByIter

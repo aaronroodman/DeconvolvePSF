@@ -1,35 +1,24 @@
 #!/nfs/slac/g/ki/ki06/roodman/Software/anaconda/bin/python
 #@Author Sean McLaughlin
 desc ='''
-This module is the first I'm writing for my project for the winter quarter of 2016 in Aaron Roodman's group.
+Arguments:
+    - expid: the exposure ID of the exposure to run against
+    - outputDir: the directory in which to create a subdirectory for temporary files and final outputs. 
+Requirements:
+    -WavefrontPSF
+    -numpy, pandas, astropy
+    -a psfex installation and python binding
+
+This module is the main module for my project for the winter quarter of 2016 in Aaron Roodman's group.
 This is built on top of previous work conducted by Aaron and his graduate student Chris Davis. They have
 developed WavefrontPSF, which estimates the optical contribution of the PSF with a relatively simple model.
 It was found that the optical portion was not as signifcant a fraction of the total PSF as hoped,
-so some sort of afterburner is going to need to be added. After the optical portion has been deconvolved
-from the observed stars (using Richardson-Lucy deconvolution), the remainder will be treated as the "atmospheric"
+so some sort of afterburner is going to need to be added. This module deconvolves the optical portion of the 
+psf from the observed stars. After the optical portion has been deconvolved
+from the stars (using Richardson-Lucy deconvolution), the remainder is be treated as the "atmospheric"
 portion of the psf. This module load in preprocessed observed stars, run WavefrontPSF on them, deconvolve
 the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
-
-#TODO Details on actually running the module.
 '''
-
-#TODO I like to do imports after argparse, chris put these before. Probably not a big difference
-from WavefrontPSF.psf_interpolator import Mesh_Interpolator
-from WavefrontPSF.digestor import Digestor
-from WavefrontPSF.psf_evaluator import Moment_Evaluator
-from WavefrontPSF.donutengine import DECAM_Model_Wavefront
-from glob import glob
-from itertools import izip
-from collections import defaultdict
-from copy import deepcopy
-from psfex import PSFEx
-import pandas as pd
-from astropy.io import fits
-import numpy as np
-from optical_model import get_optical_psf
-from lucy import deconvolve, convolve
-from subprocess import call
-
 
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
@@ -78,13 +67,11 @@ from glob import glob
 from itertools import izip
 from collections import defaultdict
 from subprocess import call
-from copy import deepcopy
 from optical_model import get_optical_psf
 from lucy import deconvolve, convolve
 
-#TODO change warning to exception
-import warnings
-warnings.filterwarnings('error')
+#Value with which to mask failed deconvolutions
+MASK_VAL = -9999
 
 print 'Starting.'
 
@@ -115,23 +102,22 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
     hdu_lengths[ccd_num] = list_len
 
 #Calculate the atmospheric portion of the psf
-resid_list = []
+resid_list = np.zeros((optpsf_stamps.shape[0], 63,63)) 
 #TODO a set of (ccd, idx) tuples or a dict would be more helpful
 bad_stars = defaultdict(set) #keep idx's of bad stars
 bad_stars_1d = set()
 for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
-    #resid_small,diffs,psiByIter,chi2ByIter = deconvolve(optpsf,vignette,psi_0=None,mask=None,mu0=6e3,convergence=1e-3,chi2Level=0.,niterations=50, extra= True)
-    resid = np.zeros((63,63))
+
+    background = vignette[vignette< vignette.mean()+vignette.std()]
     try:
         #this makes initial guess be all ones
-        background = vignette[vignette< vignette.mean()+vignette.std()]
         resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-2,niterations=50, extra= False)
 
-        resid[15:47, 15:47] = resid_small
-    except RuntimeWarning: #Some will fail
+        resid_list[idx, 15:47, 15:47] = resid_small
+    except RuntimeError: #Some will fail
         bad_stars_1d.add(idx)
         #TODO make the mask value a constant
-        resid = np.ones((63,63))*-9999 #forcing a mask
+        resid_list[idx]+= MASK_VAL #forcing a mask
 
         cp_idx = idx#still need this, since we're going to keep iterating.
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
@@ -141,10 +127,6 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
                 break
             else:
                 cp_idx-=hdu_len
-
-    resid_list.append(resid)#TODO do this in 2D ccd, idx rahter than idx?
-
-resid_list =  np.array(resid_list)
 
 print 'Deconv done.'
 
@@ -168,8 +150,8 @@ for ccd, hdulist in enumerate(meta_hdulist):
     resid_idx+=list_len
 
     #make a new hdulist, removing the stars we've masked.
-    primary_table = deepcopy(hdulist[0]) #will shallow copy work?
-    imhead = deepcopy(hdulist[1])
+    primary_table = hdulist[0].copy() #will shallow copy work?
+    imhead = hdulist[1].copy()
     objects = fits.BinTableHDU(data = hdulist[2].data[good_stars[ccd+1]], header = hdulist[2].header,\
                                name = hdulist[2].name, uint = hdulist[2].uint)
 
@@ -203,11 +185,10 @@ if not psfex_success:
 
 #Now, load in psfex's work, and reconolve with the optics portion. 
 psf_files = sorted(glob(args['outputDir']+'*.psf'))
-atmpsf_list = []
-for file, hdulist in izip(psf_files, meta_hdulist_new):
+atmpsf_list = np.zeros(len(psf_files), 32,32)
+for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist_new)):
     pex = PSFEx(file)
     for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
-        atmpsf = np.zeros((32,32))
         #psfex has a tendency to return images of weird and varying sizes
         #This scheme ensures that they will all be the same 32x32 by zero padding
         #assumes the images are square and smaller than 32x32
@@ -218,24 +199,20 @@ for file, hdulist in izip(psf_files, meta_hdulist_new):
            pad_amount = int((atmpsf.shape[0]-atmpsf_loaded.shape[0])/2)
            pad_amount_upper = pad_amount + atmpsf_loaded.shape[0]
 
-           atmpsf[pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
+           atmpsf_list[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
         elif atm_shape > atmpsf.shape[0]:
             # now we have to cut psf for... reasons
             # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
             center = int(atm_shape / 2)
             lower = center - int(atmpsf.shape[0] / 2)
             upper = lower + atmpsf.shape[0]
-            atmpsf = atmpsf_loaded[lower:upper, lower:upper]
+            atmpsf_list[idx] = atmpsf_loaded[lower:upper, lower:upper]
 
-        atmpsf_list.append(atmpsf)
-
-atmpsf_list = np.array(atmpsf_list)
-
-stars = []
+stars = np.array(atmpsf_list.shape[0], 32,32)
 for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf_list)):
 
     try:
-        stars.append(convolve(optpsf, atmpsf))
+        stars[idx] = convolve(optpsf, atmpsf))
     except ValueError:
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
             if hdu_len > idx:
@@ -246,7 +223,7 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf
         raise
 
 #TODO what to save?
-np.save(args['outputDir']+'%s_stars.npy'%expid, np.array(stars))
+np.save(args['outputDir']+'%s_stars.npy'%expid, stars)
 np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps[good_stars_1d])
 np.save(args['outputDir']+'%s_atm.npy'%expid, atmpsf_list)
 np.save(args['outputDir']+'%d_stars_minus_opt.npy'%expid, resid_list[good_stars_1d])
