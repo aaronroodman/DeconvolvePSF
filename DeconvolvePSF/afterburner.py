@@ -31,27 +31,27 @@ parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
 
 args = vars(parser.parse_args())
 
+expid = args['expid']
+outputDir = args['outputDir']
+
 #Ensure provided dir exists
 from os import path, mkdir
-if not path.isdir(args['outputDir']):
-    raise IOError("The directory %s does not exist."%args['outputDir'])
+if not path.isdir(outputDir):
+    raise IOError("The directory %s does not exist."%outputDir)
 
-if args['outputDir'][-1]  != '/':
-    args['outputDir']+='/'
-
-#TODO same thing with outputDir?
-expid = args['expid']
+if outputDir[-1]  != '/':
+    outputDir+='/'
 
 #Make new dir to store files from this run
-if not path.isdir(args['outputDir']+'00%d/'%expid):
+if not path.isdir(outputDir+'00%d/'%expid):
     try:
-        mkdir(args['outputDir']+'00%d/'%expid)
+        mkdir(outputDir+'00%d/'%expid)
     except OSError:
         print 'Failed making directory; using original output directory.'
     else:
-        args['outputDir']+='00%d/'%expid
+        outputDir+='00%d/'%expid
 else:
-    args['outputDir']+='00%d/'%expid
+    outputDir+='00%d/'%expid
 
 #Do imports here instead of before the argparse because users will be able to acces
 #the help script without these packages instalelled, and more quickly
@@ -60,7 +60,10 @@ from WavefrontPSF.digestor import Digestor
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
 from WavefrontPSF.donutengine import DECAM_Model_Wavefront
 import pandas as pd
-from astropy.io import fits #TODOchange to fitsio?
+try:
+    from astropy.io import fits #TODO change to fitsio?
+except ImportError:
+    import pyfits as fits #should have the same API
 import numpy as np
 from psfex import PSFEx
 from glob import glob
@@ -79,7 +82,7 @@ print 'Starting.'
 #TODO change indexing scheme from one long list to a ccd based one?
 optpsf_stamps, meta_hdulist = get_optical_psf(expid)
 
-#np.save(args['outputDir']+'%s_opt_test.npy'%expid, optpsf_stamps)
+#np.save(outputDir+'%s_opt_test.npy'%expid, optpsf_stamps)
 
 print 'Opts Calculated.'
 
@@ -103,9 +106,10 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
 
 #Calculate the atmospheric portion of the psf
 resid_list = np.zeros((optpsf_stamps.shape[0], 63,63)) 
-#TODO a set of (ccd, idx) tuples or a dict would be more helpful
+#TODO delete these
 bad_stars = defaultdict(set) #keep idx's of bad stars
 bad_stars_1d = set()
+deconv_successful = np.ones((optpsf_stamps.shape[0],), dtype=bool)
 for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
 
     background = vignette[vignette< vignette.mean()+vignette.std()]
@@ -116,8 +120,8 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
         resid_list[idx, 15:47, 15:47] = resid_small
     except RuntimeError: #Some will fail
         bad_stars_1d.add(idx)
-        #TODO make the mask value a constant
         resid_list[idx]+= MASK_VAL #forcing a mask
+        deconv_successful[idx] = False
 
         cp_idx = idx#still need this, since we're going to keep iterating.
         for ccd_num, hdu_len in enumerate( hdu_lengths) :
@@ -130,30 +134,22 @@ for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
 
 print 'Deconv done.'
 
-#make good stars
-good_stars = {}
-for ccd, bs in bad_stars.iteritems():
-    arr = np.array(list(set(xrange(int(hdu_lengths[ccd-1] ))) -bs))
-    good_stars[ccd] = sorted(arr) if len(arr)>0 else arr
-
-good_stars_1d = np.array(list(set( xrange(optpsf_stamps.shape[0])  ) - bad_stars_1d) )
-good_stars_1d.sort()
-
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 
 resid_idx =0
 meta_hdulist_new = []
 for ccd, hdulist in enumerate(meta_hdulist):
-    list_len = hdulist[2].data.shape[0] #TODO use hdu_lengths?
+    list_len = hdulist[2].data.shape[0]
     hdulist[2].data['VIGNET'] = resid_list[resid_idx:resid_idx+list_len]
-    resid_idx+=list_len
 
     #make a new hdulist, removing the stars we've masked.
     primary_table = hdulist[0].copy() #will shallow copy work?
     imhead = hdulist[1].copy()
-    objects = fits.BinTableHDU(data = hdulist[2].data[good_stars[ccd+1]], header = hdulist[2].header,\
+    objects = fits.BinTableHDU(data = hdulist[2].data[deconv_successful[resid_idx:resid_idx+list_len]], header = hdulist[2].header,\
                                name = hdulist[2].name)
+    objects.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
+    objects.header.set('NAXIS2', str(deconv_successful[resid_idx:resid_idx+list_len].sum()), 'Trying this...')
 
     new_hdulist = fits.HDUList(hdus = [primary_table, imhead, objects])
     meta_hdulist_new.append(new_hdulist)
@@ -162,16 +158,19 @@ for ccd, hdulist in enumerate(meta_hdulist):
     original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
     original_fname_split = original_fname.split('_')
     original_fname_split[-1] = 'seldeconv.fits'
-    new_hdulist.writeto(args['outputDir']+'_'.join(original_fname_split), clobber = True)
+    new_hdulist.writeto(outputDir+'_'.join(original_fname_split), clobber = True)
+
+    resid_idx+=list_len
+
 
 print 'Copy and write done.'
 
 #call psfex
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
-outcat_name = args['outputDir'] + '%d_outcat.cat'%expid
+outcat_name = outputDir + '%d_outcat.cat'%expid
 
-command_list = [psfex_path, args['outputDir']+'*.fits', "-c", psfex_config, "-OUTCAT_NAME",outcat_name ]
+command_list = [psfex_path, outputDir+'*.fits', "-c", psfex_config, "-OUTCAT_NAME",outcat_name ]
 
 #If shell != True, the wildcard won't work
 psfex_return= call(' '.join(command_list), shell = True)
@@ -184,7 +183,7 @@ if not psfex_success:
     exit(1)
 
 #Now, load in psfex's work, and reconolve with the optics portion. 
-psf_files = sorted(glob(args['outputDir']+'*.psf'))
+psf_files = sorted(glob(outputDir+'*.psf'))
 atmpsf_list = np.zeros(len(psf_files), 32,32)
 for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist_new)):
     pex = PSFEx(file)
@@ -209,7 +208,7 @@ for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist_new)):
             atmpsf_list[idx] = atmpsf_loaded[lower:upper, lower:upper]
 
 stars = np.array(atmpsf_list.shape[0], 32,32)
-for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf_list)):
+for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[deconv_successful], atmpsf_list)):
 
     try:
         stars[idx] = convolve(optpsf, atmpsf)
@@ -223,15 +222,16 @@ for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[good_stars_1d], atmpsf
         raise
 
 #TODO what to save?
-np.save(args['outputDir']+'%s_stars.npy'%expid, stars)
-np.save(args['outputDir']+'%s_opt.npy'%expid, optpsf_stamps[good_stars_1d])
-np.save(args['outputDir']+'%s_atm.npy'%expid, atmpsf_list)
-np.save(args['outputDir']+'%d_stars_minus_opt.npy'%expid, resid_list[good_stars_1d])
+np.save(outputDir+'%s_stars.npy'%expid, stars)
+np.save(outputDir+'%s_opt.npy'%expid, optpsf_stamps[deconv_successful])
+np.save(outputDir+'%s_atm.npy'%expid, atmpsf_list)
+np.save(outputDir+'%d_stars_minus_opt.npy'%expid, resid_list[deconv_successful])
 
-np.save(args['outputDir'] + '%s_bad_star_idxs.npy', np.array(sorted(list(bad_stars))) )
+#TODO change to deconv_sucessful
+np.save(outputDir + '%s_bad_star_idxs.npy', np.array(sorted(list(bad_stars_1d))) )
 
-optpsf_stamps = optpsf_stamps[good_stars_1d]
-resid_list = resid_list[good_stars_1d]
+optpsf_stamps = optpsf_stamps[deconv_successful]
+resid_list = resid_list[deconv_successful]
 
 #TODO below here is a mess.
 print 'Done'
@@ -240,7 +240,7 @@ print 'Done'
 # for star in stars:
 #     im = plt.imshow(star, cmap = plt.get_cmap('afmhot'), interpolation = 'none')
 #     plt.colorbar(im)
-#     plt.savefig(args['outputDir']+'%s_star.png'%expid)
+#     plt.savefig(outputDir+'%s_star.png'%expid)
 
 #Chris wrote all this below; it's an elaborate save procedure
 #If it sucks blame him
