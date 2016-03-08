@@ -20,12 +20,14 @@ portion of the psf. This module load in preprocessed observed stars, run Wavefro
 the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 '''
 
+#TODO verbose tag?
+#TODO delete temp files, use temp files, other options?
 from argparse import ArgumentParser
 parser = ArgumentParser(description = desc)
 
 parser.add_argument('expid', metavar = 'expid', type = int, help =\
                     'ID of the exposure to analyze')
-#May want to rename to tmp, since that's what the files really are.
+#May want to rename to tmp
 parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
                     'Directory to store outputs.')
 
@@ -104,7 +106,7 @@ for ccd_num, hdulist in enumerate(meta_hdulist):
 
     hdu_lengths[ccd_num] = list_len
 
-#Calculate the atmospheric portion of the psf
+#deconvolve the optical model from the observed stars
 resid_list = np.zeros((optpsf_stamps.shape[0], 63,63)) 
 #TODO delete these
 bad_stars = defaultdict(set) #keep idx's of bad stars
@@ -137,17 +139,19 @@ print 'Deconv done.'
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 
-resid_idx =0
+resid_idx =0 #TODO similar to vig_idx, a cumsum of the hdu_lengths would do the same thing.
 meta_hdulist_new = []
 for ccd, hdulist in enumerate(meta_hdulist):
     list_len = hdulist[2].data.shape[0]
     hdulist[2].data['VIGNET'] = resid_list[resid_idx:resid_idx+list_len]
 
     #make a new hdulist, removing the stars we've masked.
+    #NOTE currently failing.
     primary_table = hdulist[0].copy() #will shallow copy work?
     imhead = hdulist[1].copy()
     objects = fits.BinTableHDU(data = hdulist[2].data[deconv_successful[resid_idx:resid_idx+list_len]], header = hdulist[2].header,\
                                name = hdulist[2].name)
+    #Not sure these do anything, but trying
     objects.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
     objects.header.set('NAXIS2', str(deconv_successful[resid_idx:resid_idx+list_len].sum()), 'Trying this...')
 
@@ -166,6 +170,7 @@ for ccd, hdulist in enumerate(meta_hdulist):
 print 'Copy and write done.'
 
 #call psfex
+#TODO move up top?
 psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
 psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
 outcat_name = outputDir + '%d_outcat.cat'%expid
