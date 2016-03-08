@@ -67,10 +67,9 @@ try:
 except ImportError:
     import pyfits as fits #should have the same API
 import numpy as np
-from psfex import PSFEx
+from psfex import PSFEx #Move into one function that uses it?
 from glob import glob
 from itertools import izip
-from collections import defaultdict
 from subprocess import call
 from optical_model import get_optical_psf
 from lucy import deconvolve, convolve
@@ -78,165 +77,296 @@ from lucy import deconvolve, convolve
 #Value with which to mask failed deconvolutions
 MASK_VAL = -9999
 
+def get_hdu_idxs(meta_hdulist):
+    """
+    helper function to calculate the start/end idxs of each HDUlist in the 1D flattened case
+    :param meta_hdulist:
+    :return: hdu_idxs
+    """
+    hdu_lengths = np.zeros((62,))
+    for ccd, hdulist in enumerate(meta_hdulist):
+        hdu_lengths[ccd] = hdulist[2].data.shape[0]
+
+    hdu_idxs = hdu_lengths.cumsum()
+    np.insert(hdu_idxs, 0, 0)#insert 0 as first elem
+    return hdu_idxs
+
+def get_ccd_idx(idx_1d, hdu_idxs):
+    """
+    return the ccd and ccd idx given a 1d idx of a star.
+    :param idx_1d: the idx in the flattened case
+    :param hdu_idxs: output of getHDULength, the start/end idxs of each hdu in the 1D flattened case
+    :return: ccd_num, ccd_idx
+    """
+    last_idx = 0
+    for ccd_num, hdu_idx in enumerate( hdu_idxs) :
+        if idx_1d > hdu_idx:
+            last_idx = hdu_idx
+            continue
+        break
+    return ccd_num, idx_1d-last_idx
+
+def get_vignettes(meta_hdulist,hdu_idxs = None):
+    """
+    Get the vignettes from the hdulists as a numpy array datacube
+    :param meta_hdulist: list of hdulists with the snippets in ['VIGNET']
+    :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
+    :return: vignettes (nObj, 32,32) datacube of star vignettes
+    """
+
+    if hdu_idxs is None:
+        hdu_idxs = get_hdu_idxs(meta_hdulist)
+    vignettes = np.zeros((hdu_idxs[-1], 32,32))
+
+    for ccd_num, hdulist in enumerate(meta_hdulist):
+        sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
+        #TODO more clever interpolations?
+        sliced_vig[sliced_vig<-1000] = 0 #set really negative values to 0; it's a mask
+        sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
+        vignettes[hdu_idxs[ccd_num]:hdu_idxs[ccd_num+1]] = sliced_vig
+
+    return vignettes
+
+def deconv_optpsf(optpsf_arr, vignettes ):
+    """
+    deconvolves the optical model from the given vignettes. Returns the residuals and a boolean array of which
+    deconvolutions were successful according the the LR deconv algorithm
+    :param optpsfs: (nObj, 32,32) datacube of the optical model of the psf
+    :param vignettes: (nObj, 32,32) datacube of the star vignettes
+    :return: (nObj, 63,63) array of residuals and deconv_successful, a boolean array if a deconvolution was successful
+    """
+    resid_arr = np.zeros((optpsf_arr.shape[0], 63,63))
+    deconv_successful = np.ones((optpsf_arr.shape[0],), dtype=bool)
+    for idx, (optpsf, vignette) in enumerate(izip(optpsf_arr, vignettes)):
+        #background is all pixels below 1 std. Could vary but won't make much difference.
+        background = vignette[vignette< vignette.mean()+vignette.std()]
+        try:
+            #this makes initial guess be all ones; could guess vignette, result isn't all that different
+            resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-2,niterations=50, extra= False)
+
+            resid_arr[idx, 15:47, 15:47] = resid_small
+        except RuntimeError: #Some will fail
+            resid_arr[idx]+= MASK_VAL #forcing a mask
+            deconv_successful[idx] = False
+            #If i wanted to store bad stars by ccd and ccd_idx, I'd call get_ccd_idx here
+
+    return resid_arr, deconv_successful
+
+def write_resid(meta_hdulist, resid_arr,hdu_idxs = None):
+    """
+    Take the calculated residuals, insert them into the existing hdulists, and write them to file.
+    Returns the filenames written to.
+    :param meta_hdulist: list of hdulists to insert residuals into
+    :param resid_arr: residuals from deconvolution.
+    :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
+    :return: fnames, the filenames the hdulists were written to
+    """
+
+    if hdu_idxs is None:
+        hdu_idxs = get_hdu_idxs(meta_hdulist)
+
+    fnames = []
+    for ccd_num, hdulist in enumerate(meta_hdulist):
+        hdulist[2].data['VIGNET'] = resid_arr[hdu_idxs[ccd_num]:hdu_idxs[ccd_num+1]]
+
+        #Make new filename from old one.
+        original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
+        original_fname_split = original_fname.split('_')
+        original_fname_split[-1] = 'seldeconv.fits'
+        fname = outputDir+'_'.join(original_fname_split)
+        hdulist.writeto(fname, clobber = True)
+
+        fnames.append(fname)
+
+    return fnames
+
+#TODO include as option in write resid, or separate function?
+#Can't decide between balance of copied code and different purposes.
+def write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs = None):
+    """
+    Similar to write_resid, but removes stars where deconvolution failed. Creates new HDUlists to do this.
+    NOTE currently not compatible with PSFEx
+    param meta_hdulist: list of hdulists to insert residuals into
+    :param resid_arr: residuals from deconvolution.
+    :param deconv_successful: a boolean array defining which deconvolutions were successful
+    :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
+    :return: fnames, the filenames the hdulists were written to. Also new_meta_hdulist, a list of the new hdulists
+    """
+
+    if hdu_idxs is None:
+        hdu_idxs = get_hdu_idxs(meta_hdulist)
+
+    new_meta_hdulist = []
+    fnames = []
+    for ccd_num, hdulist in enumerate(meta_hdulist):
+        hdulist[2].data['VIGNET'] = resid_arr[hdu_idxs[ccd_num]:hdu_idxs[ccd_num+1]]
+
+
+        #make a new hdulist, removing the stars we've masked.
+        #NOTE currently not working with PSFEx
+        primary_table = hdulist[0].copy() #will shallow copy work?
+        imhead = hdulist[1].copy()
+        objects = fits.BinTableHDU(data = hdulist[2].data[deconv_successful[hdu_idxs[ccd_num]:hdu_idxs[ccd_num+1]]], header = hdulist[2].header,\
+                                   name = hdulist[2].name)
+        #Not sure these do anything, but trying
+        objects.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
+        objects.header.set('NAXIS2', str(deconv_successful[hdu_idxs[ccd_num]:hdu_idxs[ccd_num+1]].sum()), 'Trying this...')
+
+        new_hdulist = fits.HDUList(hdus = [primary_table, imhead, objects])
+        new_meta_hdulist.append(new_hdulist)
+
+        #Make new filename from old one.
+        original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
+        original_fname_split = original_fname.split('_')
+        original_fname_split[-1] = 'seldeconv.fits'
+        fname = outputDir+'_'.join(original_fname_split)
+        new_hdulist.writeto(fname, clobber = True)
+        fnames.append(fname)
+
+    return fnames, new_meta_hdulist
+
+def call_psfex(fnames = None):
+    """
+    calls psfex on ki-ls on the files. returns True if the call executed without error.
+    :param fnames: (Optional) filenames to call psfex on. If omitted, will be called on all fits files in outputDir.
+    :return: psfex_success, True if the call didn't return an error
+    """
+    psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
+    psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
+    outcat_name = outputDir + '%d_outcat.cat'%expid
+
+    if fnames is None:
+        file_string = outputDir+'*.fits'
+    else:
+        file_string = " ".join(fnames)
+
+    command_list = [psfex_path,file_string, "-c", psfex_config, "-OUTCAT_NAME",outcat_name ]
+
+    #If shell != True, the wildcard won't work
+    psfex_return= call(' '.join(command_list), shell = True)
+    psfex_success = True if psfex_return==0 else False
+    print 'PSFEx Call Successful: %s'%psfex_success
+
+    return psfex_success
+
+def load_atmpsf(meta_hdulist):
+    """
+    return the atmpsf calculated by PSFEx
+    :param meta_hdulist: list of hdulists. Required for location information PSFEx uses to interpolate
+    :return: atmpsf_arr (nObj, 32,32) array of atm psf estimates
+    """
+    psf_files = sorted(glob(outputDir+'*.psf'))
+    atmpsf_arr = np.zeros(NObj, 32,32)
+    for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist)):
+        pex = PSFEx(file)
+        for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
+            #psfex has a tendency to return images of weird and varying sizes
+            #This scheme ensures that they will all be the same 32x32 by zero padding
+            #assumes the images are square and smaller than 32x32
+            #Proof god is real and hates observational astronomers.
+            atmpsf_loaded = pex.get_rec(yimage, ximage)
+            atm_shape = atmpsf_loaded.shape[0] #assumed to be square
+            if atm_shape < atmpsf_arr.shape[1]:
+               pad_amount = int((atmpsf_arr.shape[1]-atmpsf_loaded.shape[0])/2)
+               pad_amount_upper = pad_amount + atmpsf_loaded.shape[0]
+
+               atmpsf_arr[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
+            elif atm_shape > atmpsf_arr.shape[1]:
+                # now we have to cut psf for... reasons
+                # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
+                center = int(atm_shape / 2)
+                lower = center - int(atmpsf_arr.shape[1] / 2)
+                upper = lower + atmpsf_arr.shape[1]
+                atmpsf_arr[idx] = atmpsf_loaded[lower:upper, lower:upper]
+
+    return atmpsf_arr
+
+#TODO have deconv_successful as an argument here or make the user take care of it beforehand?
+def make_stars(optpsf_arr, atmpsf_arr, deconv_successful = None):
+    """
+    convolve the optical and psf models to make a full model for the psf of the stars
+    :param optpsf_arr: array of optical psf models
+    :param atmpsf_arr: array of atmospheric psf models
+    :param deconv_successful: boolean array denoting if the deconvolution converged. If passed in, will be used to
+    slice bad indexs from optpsf_arr
+    :return: stars, (nObj, 32,32) array of star psf estimates.
+    """
+    stars = np.array(atmpsf_arr.shape[0], 32,32)
+
+    #Note that atmpsf_arr will already have the bad stars removed if the user is using that scheme.
+    if deconv_successful is not None:
+        #TODO make sure this isn't modifying the outer object
+        optpsf_arr = optpsf_arr[deconv_successful] #slice off failed ones.
+
+    for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_arr, atmpsf_arr)):
+
+        try:
+            stars[idx] = convolve(optpsf, atmpsf)
+        except ValueError:
+
+            print 'Convolve failed on object (1D Index) #%d'%(idx)
+            raise
+
+    return stars
+
 print 'Starting.'
 
 #get optical PSF
 #TODO change indexing scheme from one long list to a ccd based one?
+#TODO global NObj
+#TODO wrap in __name__ == '__main__' block.
 optpsf_stamps, meta_hdulist = get_optical_psf(expid)
+
+NObj = optpsf_stamps.shape[0]
+
+hdu_lengths, hdu_idxs = get_hdu_idxs(meta_hdulist)
 
 #np.save(outputDir+'%s_opt_test.npy'%expid, optpsf_stamps)
 
 print 'Opts Calculated.'
 
-vignettes = np.zeros((optpsf_stamps.shape[0], 32,32))
-
 #extract star vignettes from the hdulists
-vig_idx=0
-hdu_lengths = np.zeros((62,)) #TODO CCDs indexed with 0's here
-for ccd_num, hdulist in enumerate(meta_hdulist):
-    list_len = hdulist[2].data.shape[0]
-
-    sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
-    sliced_vig[sliced_vig<-1000] = 0 #set really negative values to 0; it's a mask
-    sliced_vig = sliced_vig/sliced_vig.sum((1,2))[:, None, None] #normalize
-    vignettes[vig_idx:vig_idx+list_len] = sliced_vig 
-    vig_idx+=list_len
-    #vig_shape = hdulist[2].data['VIGNET'][0].shape
-    #print 'CCD: %d\tVignette Shape:(%d, %d)'%(ccd_num+1, vig_shape[0], vig_shape[1] )
-
-    hdu_lengths[ccd_num] = list_len
+vignettes = get_vignettes(meta_hdulist, hdu_idxs)
 
 #deconvolve the optical model from the observed stars
-resid_list = np.zeros((optpsf_stamps.shape[0], 63,63)) 
-#TODO delete these
-bad_stars = defaultdict(set) #keep idx's of bad stars
-bad_stars_1d = set()
-deconv_successful = np.ones((optpsf_stamps.shape[0],), dtype=bool)
-for idx, (optpsf, vignette) in enumerate(izip(optpsf_stamps, vignettes)):
-
-    background = vignette[vignette< vignette.mean()+vignette.std()]
-    try:
-        #this makes initial guess be all ones
-        resid_small = deconvolve(optpsf,vignette,mask=None,mu0=background.mean(),convergence=1e-2,niterations=50, extra= False)
-
-        resid_list[idx, 15:47, 15:47] = resid_small
-    except RuntimeError: #Some will fail
-        bad_stars_1d.add(idx)
-        resid_list[idx]+= MASK_VAL #forcing a mask
-        deconv_successful[idx] = False
-
-        cp_idx = idx#still need this, since we're going to keep iterating.
-        for ccd_num, hdu_len in enumerate( hdu_lengths) :
-            if hdu_len > cp_idx:
-                bad_stars[ccd_num+1].add(cp_idx)#TODO indexing is confusing. CCDs i have as 1 based, but idx's i have as 0.
-                #print 'Deconvolve failed on CCD %d Image %d'%(ccd_num+1, cp_idx)
-                break
-            else:
-                cp_idx-=hdu_len
+resid_arr, deconv_successful = deconv_optpsf(optpsf_stamps, vignettes)
 
 print 'Deconv done.'
 
 #now, insert the atmospheric portion back into the hdulists, and write them to disk
 #PSFEx needs the information in those lists to run correctly.
 
-resid_idx =0 #TODO similar to vig_idx, a cumsum of the hdu_lengths would do the same thing.
-meta_hdulist_new = []
-for ccd, hdulist in enumerate(meta_hdulist):
-    list_len = hdulist[2].data.shape[0]
-    hdulist[2].data['VIGNET'] = resid_list[resid_idx:resid_idx+list_len]
-
-    #make a new hdulist, removing the stars we've masked.
-    #NOTE currently failing.
-    primary_table = hdulist[0].copy() #will shallow copy work?
-    imhead = hdulist[1].copy()
-    objects = fits.BinTableHDU(data = hdulist[2].data[deconv_successful[resid_idx:resid_idx+list_len]], header = hdulist[2].header,\
-                               name = hdulist[2].name)
-    #Not sure these do anything, but trying
-    objects.header.set('EXTNAME', 'LDAC_OBJECTS', 'a name')
-    objects.header.set('NAXIS2', str(deconv_successful[resid_idx:resid_idx+list_len].sum()), 'Trying this...')
-
-    new_hdulist = fits.HDUList(hdus = [primary_table, imhead, objects])
-    meta_hdulist_new.append(new_hdulist)
-
-    #Make new filename from old one.
-    original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
-    original_fname_split = original_fname.split('_')
-    original_fname_split[-1] = 'seldeconv.fits'
-    new_hdulist.writeto(outputDir+'_'.join(original_fname_split), clobber = True)
-
-    resid_idx+=list_len
-
+resid_fnames = write_resid(meta_hdulist, resid_arr, hdu_idxs)
+#resid_fnames, new_meta_hdulist = write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs)
 
 print 'Copy and write done.'
 
-#call psfex
-#TODO move up top?
-psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
-psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
-outcat_name = outputDir + '%d_outcat.cat'%expid
-
-command_list = [psfex_path, outputDir+'*.fits', "-c", psfex_config, "-OUTCAT_NAME",outcat_name ]
-
-#If shell != True, the wildcard won't work
-psfex_return= call(' '.join(command_list), shell = True)
-psfex_success = True if psfex_return==0 else False
-print 'PSFEx Call Successful: %s'%psfex_success
+psfex_success = call_psfex(resid_fnames)
 
 #no use continuing if the psfex call failed.
+#TODO if I write a verbose flag this should print if that is turned off. Cuz the user always needs to know why it exited.
 if not psfex_success:
     from sys import exit
     exit(1)
 
-#Now, load in psfex's work, and reconolve with the optics portion. 
-psf_files = sorted(glob(outputDir+'*.psf'))
-atmpsf_list = np.zeros(len(psf_files), 32,32)
-for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist_new)):
-    pex = PSFEx(file)
-    for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
-        #psfex has a tendency to return images of weird and varying sizes
-        #This scheme ensures that they will all be the same 32x32 by zero padding
-        #assumes the images are square and smaller than 32x32
-        #Proof god is real and hates observational astronomers.
-        atmpsf_loaded = pex.get_rec(yimage, ximage)
-        atm_shape = atmpsf_loaded.shape[0] #assumed to be square
-        if atm_shape < atmpsf_list.shape[1]:
-           pad_amount = int((atmpsf_list.shape[1]-atmpsf_loaded.shape[0])/2)
-           pad_amount_upper = pad_amount + atmpsf_loaded.shape[0]
+atmpsf_arr = load_atmpsf(meta_hdulist)
+#atmpsf_arr = load_atmpsf(new_meta_hdulist)
 
-           atmpsf_list[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
-        elif atm_shape > atmpsf_list.shape[1]:
-            # now we have to cut psf for... reasons
-            # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
-            center = int(atm_shape / 2)
-            lower = center - int(atmpsf_list.shape[1] / 2)
-            upper = lower + atmpsf_list.shape[1]
-            atmpsf_list[idx] = atmpsf_loaded[lower:upper, lower:upper]
-
-stars = np.array(atmpsf_list.shape[0], 32,32)
-for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_stamps[deconv_successful], atmpsf_list)):
-
-    try:
-        stars[idx] = convolve(optpsf, atmpsf)
-    except ValueError:
-        for ccd_num, hdu_len in enumerate( hdu_lengths) :
-            if hdu_len > idx:
-                print 'Convolve failed on CCD %d Image %d'%(ccd_num+1, idx)
-                break
-            else:
-                idx-=hdu_len
-        raise
+stars = make_stars(optpsf_stamps, atmpsf_arr)
+#stars = make_stars(optpsf_stamps, atmpsf_arr, deconv_successful)
 
 #TODO what to save?
+#TODO saved deconv_succsseful sliced arrays?
+#Note that these won't al have the same dimensions without a slice by deconv_successful
 np.save(outputDir+'%s_stars.npy'%expid, stars)
-np.save(outputDir+'%s_opt.npy'%expid, optpsf_stamps[deconv_successful])
-np.save(outputDir+'%s_atm.npy'%expid, atmpsf_list)
-np.save(outputDir+'%d_stars_minus_opt.npy'%expid, resid_list[deconv_successful])
+np.save(outputDir+'%s_opt.npy'%expid, optpsf_stamps)
+np.save(outputDir+'%s_atm.npy'%expid, atmpsf_arr)
+np.save(outputDir+'%d_stars_minus_opt.npy'%expid, resid_arr)
 
-#TODO change to deconv_sucessful
-np.save(outputDir + '%s_bad_star_idxs.npy', np.array(sorted(list(bad_stars_1d))) )
+np.save(outputDir+'%s_deconv_successful.npy', deconv_successful)
 
 optpsf_stamps = optpsf_stamps[deconv_successful]
-resid_list = resid_list[deconv_successful]
+resid_arr = resid_arr[deconv_successful]
 
 #TODO below here is a mess.
 print 'Done'
