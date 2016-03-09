@@ -440,10 +440,10 @@ if __name__ == '__main__':
     optpsf_stamps, meta_hdulist = get_optical_psf(expid)
 
     NObj = optpsf_stamps.shape[0]#I'm undecided about hte use of this carrier
-    #For the most part the number of stars is continaed in the other objects I pass around
+    #For the most part the number of stars is contained implicitly in the other objects I pass around
     #still, being explicit costs next to nothing and is clear to the user.
 
-    hdu_lengths, hdu_idxs = get_hdu_idxs(meta_hdulist)
+    hdu_idxs = get_hdu_idxs(meta_hdulist)
 
     #np.save(output_dir+'%s_opt_test.npy'%expid, optpsf_stamps)
 
@@ -495,3 +495,5 @@ if __name__ == '__main__':
 
     optpsf_stamps = optpsf_stamps[deconv_successful]
     resid_arr = resid_arr[deconv_successful]
+
+    #TODO optional make_wavefront call
