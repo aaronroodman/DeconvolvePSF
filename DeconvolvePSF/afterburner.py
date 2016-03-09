@@ -3,7 +3,7 @@
 desc ='''
 Arguments:
     - expid: the exposure ID of the exposure to run against
-    - outputDir: the directory in which to create a subdirectory for temporary files and final outputs. 
+    - output_dir: the directory in which to create a subdirectory for temporary files and final outputs.
 Requirements:
     -WavefrontPSF
     -numpy, pandas, astropy or pyfits
@@ -20,48 +20,12 @@ portion of the psf. This module load in preprocessed observed stars, run Wavefro
 the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
 '''
 
-#TODO verbose tag?
-#TODO delete temp files, use temp files, other options?
-from argparse import ArgumentParser
-parser = ArgumentParser(description = desc)
-
-parser.add_argument('expid', metavar = 'expid', type = int, help =\
-                    'ID of the exposure to analyze')
-#May want to rename to tmp
-parser.add_argument('outputDir', metavar = 'outputDir', type = str, help =\
-                    'Directory to store outputs.')
-
-args = vars(parser.parse_args())
-
-expid = args['expid']
-outputDir = args['outputDir']
-
-#Ensure provided dir exists
-from os import path, mkdir
-if not path.isdir(outputDir):
-    raise IOError("The directory %s does not exist."%outputDir)
-
-if outputDir[-1]  != '/':
-    outputDir+='/'
-
-#Make new dir to store files from this run
-if not path.isdir(outputDir+'00%d/'%expid):
-    try:
-        mkdir(outputDir+'00%d/'%expid)
-    except OSError:
-        print 'Failed making directory; using original output directory.'
-    else:
-        outputDir+='00%d/'%expid
-else:
-    outputDir+='00%d/'%expid
-
 #Do imports here instead of before the argparse because users will be able to acces
 #the help script without these packages instalelled, and more quickly
+#TODO now that argparse is in a __main__, not sure where to put these that'd be easiest.
 from WavefrontPSF.psf_interpolator import Mesh_Interpolator
 from WavefrontPSF.digestor import Digestor
-from WavefrontPSF.psf_evaluator import Moment_Evaluator
 from WavefrontPSF.donutengine import DECAM_Model_Wavefront
-import pandas as pd
 try:
     from astropy.io import fits #TODO change to fitsio?
 except ImportError:
@@ -106,9 +70,10 @@ def get_ccd_idx(idx_1d, hdu_idxs):
         break
     return ccd_num, idx_1d-last_idx
 
-def get_vignettes(meta_hdulist,hdu_idxs = None):
+def get_vignettes(NObj, meta_hdulist,hdu_idxs = None):
     """
     Get the vignettes from the hdulists as a numpy array datacube
+    :param NObj: number of stars
     :param meta_hdulist: list of hdulists with the snippets in ['VIGNET']
     :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
     :return: vignettes (nObj, 32,32) datacube of star vignettes
@@ -116,7 +81,7 @@ def get_vignettes(meta_hdulist,hdu_idxs = None):
 
     if hdu_idxs is None:
         hdu_idxs = get_hdu_idxs(meta_hdulist)
-    vignettes = np.zeros((hdu_idxs[-1], 32,32))
+    vignettes = np.zeros((NObj, 32,32))
 
     for ccd_num, hdulist in enumerate(meta_hdulist):
         sliced_vig  = hdulist[2].data['VIGNET'][:, 15:47, 15:47] #slice to same size as stamps
@@ -127,16 +92,17 @@ def get_vignettes(meta_hdulist,hdu_idxs = None):
 
     return vignettes
 
-def deconv_optpsf(optpsf_arr, vignettes ):
+def deconv_optpsf(NObj, optpsf_arr, vignettes ):
     """
     deconvolves the optical model from the given vignettes. Returns the residuals and a boolean array of which
     deconvolutions were successful according the the LR deconv algorithm
-    :param optpsfs: (nObj, 32,32) datacube of the optical model of the psf
+    :param NObj: number of stars
+    :param optpsf_arr: (nObj, 32,32) datacube of the optical model of the psf
     :param vignettes: (nObj, 32,32) datacube of the star vignettes
-    :return: (nObj, 63,63) array of residuals and deconv_successful, a boolean array if a deconvolution was successful
+    :return: resid_arr and deconv_successful, (nObj, 63,63) array of residuals and deconv_successful, a boolean array if a deconvolution was successful
     """
-    resid_arr = np.zeros((optpsf_arr.shape[0], 63,63))
-    deconv_successful = np.ones((optpsf_arr.shape[0],), dtype=bool)
+    resid_arr = np.zeros((NObj, 63,63))
+    deconv_successful = np.ones((NObj,), dtype=bool)
     for idx, (optpsf, vignette) in enumerate(izip(optpsf_arr, vignettes)):
         #background is all pixels below 1 std. Could vary but won't make much difference.
         background = vignette[vignette< vignette.mean()+vignette.std()]
@@ -152,10 +118,11 @@ def deconv_optpsf(optpsf_arr, vignettes ):
 
     return resid_arr, deconv_successful
 
-def write_resid(meta_hdulist, resid_arr,hdu_idxs = None):
+def write_resid(output_dir, meta_hdulist, resid_arr,hdu_idxs = None):
     """
     Take the calculated residuals, insert them into the existing hdulists, and write them to file.
     Returns the filenames written to.
+    :param output_dir: the directory to store the output and temp files
     :param meta_hdulist: list of hdulists to insert residuals into
     :param resid_arr: residuals from deconvolution.
     :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
@@ -173,7 +140,7 @@ def write_resid(meta_hdulist, resid_arr,hdu_idxs = None):
         original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
         original_fname_split = original_fname.split('_')
         original_fname_split[-1] = 'seldeconv.fits'
-        fname = outputDir+'_'.join(original_fname_split)
+        fname = output_dir+'_'.join(original_fname_split)
         hdulist.writeto(fname, clobber = True)
 
         fnames.append(fname)
@@ -182,11 +149,12 @@ def write_resid(meta_hdulist, resid_arr,hdu_idxs = None):
 
 #TODO include as option in write resid, or separate function?
 #Can't decide between balance of copied code and different purposes.
-def write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs = None):
+def write_resid_new_file(output_dir, meta_hdulist, resid_arr, deconv_successful, hdu_idxs = None):
     """
     Similar to write_resid, but removes stars where deconvolution failed. Creates new HDUlists to do this.
     NOTE currently not compatible with PSFEx
     param meta_hdulist: list of hdulists to insert residuals into
+    :param output_dir: the directory to store the output and temp files
     :param resid_arr: residuals from deconvolution.
     :param deconv_successful: a boolean array defining which deconvolutions were successful
     :param hdu_idxs: (Optional) Defines the idxs where the hdus start and end in the 1D flattened case
@@ -219,24 +187,26 @@ def write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs = 
         original_fname = hdulist.filename().split('/')[-1]#just get the filename, not the path
         original_fname_split = original_fname.split('_')
         original_fname_split[-1] = 'seldeconv.fits'
-        fname = outputDir+'_'.join(original_fname_split)
+        fname = output_dir+'_'.join(original_fname_split)
         new_hdulist.writeto(fname, clobber = True)
         fnames.append(fname)
 
     return fnames, new_meta_hdulist
 
-def call_psfex(fnames = None):
+def call_psfex(expid,output_dir, fnames = None):
     """
     calls psfex on ki-ls on the files. returns True if the call executed without error.
-    :param fnames: (Optional) filenames to call psfex on. If omitted, will be called on all fits files in outputDir.
+    :param expid: The id of the exposure being studied
+    :param output_dir: the directory to store the output and temp files
+    :param fnames: (Optional) filenames to call psfex on. If omitted, will be called on all fits files in output_dir.
     :return: psfex_success, True if the call didn't return an error
     """
     psfex_path = '/nfs/slac/g/ki/ki22/roodman/EUPS_DESDM/eups/packages/Linux64/psfex/3.17.3+0/bin/psfex'
     psfex_config = '/afs/slac.stanford.edu/u/ec/roodman/Astrophysics/PSF/desdm-plus.psfex'
-    outcat_name = outputDir + '%d_outcat.cat'%expid
+    outcat_name = output_dir + '%d_outcat.cat'%expid
 
     if fnames is None:
-        file_string = outputDir+'*.fits'
+        file_string = output_dir+'*.fits'
     else:
         file_string = " ".join(fnames)
 
@@ -249,14 +219,15 @@ def call_psfex(fnames = None):
 
     return psfex_success
 
-def load_atmpsf(meta_hdulist):
+def load_psfex(psf_files, NObj, meta_hdulist):
     """
-    return the atmpsf calculated by PSFEx
-    :param meta_hdulist: list of hdulists. Required for location information PSFEx uses to interpolate
-    :return: atmpsf_arr (nObj, 32,32) array of atm psf estimates
+    Loads output files from PSFEx for given stars
+    :param psf_files: the output files from psfex
+    :param NObj: the number of objects that will be loaded
+    :param meta_hdulist: the list of HDULists
+    :return: psfex_arr: a (NObj, 32,32) datacube
     """
-    psf_files = sorted(glob(outputDir+'*.psf'))
-    atmpsf_arr = np.zeros(NObj, 32,32)
+    psfex_arr = np.zeros(NObj, 32,32)
     for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist)):
         pex = PSFEx(file)
         for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
@@ -264,34 +235,34 @@ def load_atmpsf(meta_hdulist):
             #This scheme ensures that they will all be the same 32x32 by zero padding
             #assumes the images are square and smaller than 32x32
             #Proof god is real and hates observational astronomers.
-            atmpsf_loaded = pex.get_rec(yimage, ximage)
-            atm_shape = atmpsf_loaded.shape[0] #assumed to be square
-            if atm_shape < atmpsf_arr.shape[1]:
-               pad_amount = int((atmpsf_arr.shape[1]-atmpsf_loaded.shape[0])/2)
-               pad_amount_upper = pad_amount + atmpsf_loaded.shape[0]
+            psfex_loaded = pex.get_rec(yimage, ximage)
+            atm_shape = psfex_loaded.shape[0] #assumed to be square
+            if atm_shape < psfex_arr.shape[1]:
+               pad_amount = int((psfex_arr.shape[1]-psfex_loaded.shape[0])/2)
+               pad_amount_upper = pad_amount + psfex_loaded.shape[0]
 
-               atmpsf_arr[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_loaded
-            elif atm_shape > atmpsf_arr.shape[1]:
+               psfex_arr[idx, pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = psfex_loaded
+            elif atm_shape > psfex_arr.shape[1]:
                 # now we have to cut psf for... reasons
                 # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
                 center = int(atm_shape / 2)
-                lower = center - int(atmpsf_arr.shape[1] / 2)
-                upper = lower + atmpsf_arr.shape[1]
-                atmpsf_arr[idx] = atmpsf_loaded[lower:upper, lower:upper]
+                lower = center - int(psfex_arr.shape[1] / 2)
+                upper = lower + psfex_arr.shape[1]
+                psfex_arr[idx] = psfex_loaded[lower:upper, lower:upper]
 
-    return atmpsf_arr
+    return psfex_arr
 
-#TODO have deconv_successful as an argument here or make the user take care of it beforehand?
-def make_stars(optpsf_arr, atmpsf_arr, deconv_successful = None):
+def make_stars(NObj, optpsf_arr, atmpsf_arr, deconv_successful = None):
     """
     convolve the optical and psf models to make a full model for the psf of the stars
+    :param NObj: number of stars
     :param optpsf_arr: array of optical psf models
     :param atmpsf_arr: array of atmospheric psf models
     :param deconv_successful: boolean array denoting if the deconvolution converged. If passed in, will be used to
     slice bad indexs from optpsf_arr
     :return: stars, (nObj, 32,32) array of star psf estimates.
     """
-    stars = np.array(atmpsf_arr.shape[0], 32,32)
+    stars = np.array(NObj, 32,32)
 
     #Note that atmpsf_arr will already have the bad stars removed if the user is using that scheme.
     if deconv_successful is not None:
@@ -309,259 +280,218 @@ def make_stars(optpsf_arr, atmpsf_arr, deconv_successful = None):
 
     return stars
 
-print 'Starting.'
-
-#get optical PSF
-#TODO change indexing scheme from one long list to a ccd based one?
-#TODO global NObj
-#TODO wrap in __name__ == '__main__' block.
-optpsf_stamps, meta_hdulist = get_optical_psf(expid)
-
-NObj = optpsf_stamps.shape[0]
-
-hdu_lengths, hdu_idxs = get_hdu_idxs(meta_hdulist)
-
-#np.save(outputDir+'%s_opt_test.npy'%expid, optpsf_stamps)
-
-print 'Opts Calculated.'
-
-#extract star vignettes from the hdulists
-vignettes = get_vignettes(meta_hdulist, hdu_idxs)
-
-#deconvolve the optical model from the observed stars
-resid_arr, deconv_successful = deconv_optpsf(optpsf_stamps, vignettes)
-
-print 'Deconv done.'
-
-#now, insert the atmospheric portion back into the hdulists, and write them to disk
-#PSFEx needs the information in those lists to run correctly.
-
-resid_fnames = write_resid(meta_hdulist, resid_arr, hdu_idxs)
-#resid_fnames, new_meta_hdulist = write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs)
-
-print 'Copy and write done.'
-
-psfex_success = call_psfex(resid_fnames)
-
-#no use continuing if the psfex call failed.
-#TODO if I write a verbose flag this should print if that is turned off. Cuz the user always needs to know why it exited.
-if not psfex_success:
-    from sys import exit
-    exit(1)
-
-atmpsf_arr = load_atmpsf(meta_hdulist)
-#atmpsf_arr = load_atmpsf(new_meta_hdulist)
-
-stars = make_stars(optpsf_stamps, atmpsf_arr)
-#stars = make_stars(optpsf_stamps, atmpsf_arr, deconv_successful)
-
-#TODO what to save?
-#TODO saved deconv_succsseful sliced arrays?
-#Note that these won't al have the same dimensions without a slice by deconv_successful
-np.save(outputDir+'%s_stars.npy'%expid, stars)
-np.save(outputDir+'%s_opt.npy'%expid, optpsf_stamps)
-np.save(outputDir+'%s_atm.npy'%expid, atmpsf_arr)
-np.save(outputDir+'%d_stars_minus_opt.npy'%expid, resid_arr)
-
-np.save(outputDir+'%s_deconv_successful.npy', deconv_successful)
-
-optpsf_stamps = optpsf_stamps[deconv_successful]
-resid_arr = resid_arr[deconv_successful]
-
-#TODO below here is a mess.
-print 'Done'
-
-# from matplotlib import pyplot as plt
-# for star in stars:
-#     im = plt.imshow(star, cmap = plt.get_cmap('afmhot'), interpolation = 'none')
-#     plt.colorbar(im)
-#     plt.savefig(outputDir+'%s_star.png'%expid)
-
-#Chris wrote all this below; it's an elaborate save procedure
-#If it sucks blame him
-
-sample_num = 0
-kils = True
-
-if kils:
-    # these give the deconvolved stars
-    #TODO change this to the passed in output?
-    out_base = '/nfs/slac/g/ki/ki18/des/swmclau2/DeconvOutput/'
-    #out_base = '/nfs/slac/g/ki/ki18/des/cpd/DeconvOutput/'
-    deconv_dir = out_base + '{0:08d}'.format(expid)
-    # not sure what stars these really are? the combined psfex + deconv?
-    deconvmodel_loc = out_base + '{0:08d}/{0}_stars.npy'.format(expid)
-    deconvopt_loc = out_base + '{0:08d}/{0}_opt.npy'.format(expid)
-    deconvatm_loc = out_base + '{0:08d}/{0}_atm.npy'.format(expid)
-    deconvstarsminusopt_loc = out_base + '{0:08d}/{0}_stars_minus_opt.npy'.format(expid)
-
-    deconvopt_immediate_loc = '/nfs/slac/g/ki/ki18/des/swmclau2/DeconvOutput/{0:08d}/{0}_opt_test.npy'.format(expid)
-
-    jamierod_results_path = '/nfs/slac/g/ki/ki18/des/cpd/jamierod_results.csv'
-    mesh_directory = '/nfs/slac/g/ki/ki22/roodman/ComboMeshesv20'
-    # directory containing the input data files
-    base_directory = '/nfs/slac/g/ki/ki18/des/cpd/psfex_catalogs/SVA1_FINALCUT/psfcat/'
-
-
-def evaluate_stamps_and_combine_with_data(stamps, data):
+def evaluate_stamps_and_combine_with_data(WF, stamps, data):
     eval_data = WF.evaluate_psf(stamps)
     eval_data.index = data.index
     combined_df = eval_data.combine_first(data)
     return combined_df
 
-jamierod_results = pd.read_csv(jamierod_results_path)
-jamierod_results = jamierod_results.set_index('expid')
+def make_wavefront(expid, output_dir, optpsf = None, atmpsf = None, starminusopt = None, model = None):
+    """
+    Make a wavefront, useful for diagnostic plots
+    :param expid: the id of the exposure being studied
+    :param output_dir: the directory to store the output and temp files
+    :param optpsf: (Optional) the optical psf in a datacube
+    :param atmpsf: (Optional) the atmopsheric psf in a datacube
+    :param starminusopt: (Optional) the residual when the optpsf is deconvolved
+    :param model: (model) the convolution of optpsf and atmpsf
+    :return: None
+    """
+    # these give the deconvolved stars
+    #Wish I knew how to loop this
+    if optpsf is None:
+        deconvopt_loc = output_dir + '{0:08d}/{0}_opt.npy'.format(expid)
+        optpsf = np.load(deconvopt_loc)
 
-# set up objects. make sure I get the right mesh
-digestor = Digestor()
-PSF_Evaluator = Moment_Evaluator()
-mesh_name = 'Science-20121120s1-v20i2_All'
-PSF_Interpolator = Mesh_Interpolator(mesh_name=mesh_name, directory=mesh_directory)
+    if atmpsf is None:
+        deconvatm_loc = output_dir + '{0:08d}/{0}_atm.npy'.format(expid)
+        atmpsf = np.load(deconvatm_loc)
 
-# This will be our main wavefront
-WF = DECAM_Model_Wavefront(PSF_Interpolator=PSF_Interpolator)
+    if starminusopt is None:
+        deconvstarsminusopt_loc = output_dir + '{0:08d}/{0}_stars_minus_opt.npy'.format(expid)
+        #set the shape to be right
+        starminusopt = np.load(deconvstarsminusopt_loc)[:, 15:47, 15:47]
 
-# load up data
-expid_path = '/{0:08d}/{1:08d}'.format(expid - expid % 1000, expid)
-data_directory = base_directory + expid_path
-files = sorted(glob(data_directory + '/*{0}'.format('_selpsfcat.fits')))
+    if model is None:
+        deconvmodel_loc = output_dir + '{0:08d}/{0}_stars.npy'.format(expid)
+        model = np.load(deconvmodel_loc)
 
-data_df = digestor.digest_fits(files[0], do_exclude=False)
-meta_hdulist = [fits.open(files[0])] #list of HDULists #META
+    mesh_directory = '/nfs/slac/g/ki/ki22/roodman/ComboMeshesv20'
+    # directory containing the input data files
+    base_directory = '/nfs/slac/g/ki/ki18/des/cpd/psfex_catalogs/SVA1_FINALCUT/psfcat/'
 
-for file in files[1:]:
-    tmpData = digestor.digest_fits(file,do_exclude=False )
-    data_df = data_df.append(tmpData)
-    meta_hdulist.append(fits.open(file))
+    # set up objects. make sure I get the right mesh
+    digestor = Digestor()
+    mesh_name = 'Science-20121120s1-v20i2_All'
+    PSF_Interpolator = Mesh_Interpolator(mesh_name=mesh_name, directory=mesh_directory)
 
-if sample_num > 0:
-    full_size = len(data_df)
-    sample_indx = np.random.choice(full_size, sample_num)
-    data_df = data_df.iloc[sample_indx]
-    print(full_size, sample_num)
+    # This will be our main wavefront
+    WF = DECAM_Model_Wavefront(PSF_Interpolator=PSF_Interpolator)
 
-# make the psfex models for both portions
-psf_files = sorted(glob(data_directory + '/*{0}'.format('psfcat_validation_subtracted.psf')))
+    # load up data
+    expid_path = '/{0:08d}/{1:08d}'.format(expid - expid % 1000, expid)
+    data_directory = base_directory + expid_path
+    files = sorted(glob(data_directory + '/*{0}'.format('_selpsfcat.fits')))
 
-psfex_list = []
-psfex_flipped_list = []
+    data_df = digestor.digest_fits(files[0], do_exclude=False)
+    #Can't use the new one above, because we're calling on different data.
+    meta_hdulist = [fits.open(files[0])]
 
-#TODO Inconcisitent definition of stars!
-stars = []
-for psfex_file, hdulist in izip(psf_files, meta_hdulist_new):
-    pex_orig = PSFEx(psfex_file)
-    for yimage, ximage in izip(hdulist[2].data['YWIN_IMAGE'], hdulist[2].data['XWIN_IMAGE']):
-        atmpsf_tmp = np.zeros((32,32))
-        #psfex has a tendency to return images of weird and varying sizes
-        #This scheme ensures that they will all be the same 32x32 by zero padding
-        #assumes the images are square and smaller than 32x32
-        #Proof god is real and hates observational astronomers.
-        atmpsf_small = pex_orig.get_rec(yimage, ximage)
-        atm_shape = atmpsf_small.shape[0] #assumed to be square
-        if atm_shape < atmpsf_tmp.shape[0]:
-            pad_amount = int((atmpsf_tmp.shape[0]-atmpsf_small.shape[0])/2)
-            pad_amount_upper = pad_amount + atmpsf_small.shape[0]
+    for file in files[1:]:
+        tmpData = digestor.digest_fits(file,do_exclude=False )
+        data_df = data_df.append(tmpData)
+        meta_hdulist.append(fits.open(file))
 
-            atmpsf_tmp[pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_small
-        elif atm_shape > atmpsf_tmp.shape[0]:
-            # now we have to cut psf for... reasons
-            # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
-            center = int(atm_shape / 2)
-            lower = center - int(atmpsf_tmp.shape[0] / 2)
-            upper = lower + atmpsf_tmp.shape[0]
-            atmpsf_tmp = atmpsf_small[lower:upper, lower:upper]
-        psfex_list.append(atmpsf_tmp)
+    hdu_idxs = get_hdu_idxs(meta_hdulist)
+    NObj = hdu_idxs[-1]
 
-        atmpsf_tmp = np.zeros((32,32))
-        #psfex has a tendency to return images of weird and varying sizes
-        #This scheme ensures that they will all be the same 32x32 by zero padding
-        #assumes the images are square and smaller than 32x32
-        #Proof god is real and hates observational astronomers.
-        atmpsf_small = pex_orig.get_rec(ximage, yimage)
-        atm_shape = atmpsf_small.shape[0] #assumed to be square
-        if atm_shape < atmpsf_tmp.shape[0]:
-            pad_amount = int((atmpsf_tmp.shape[0]-atmpsf_small.shape[0])/2)
-            pad_amount_upper = pad_amount + atmpsf_small.shape[0]
+    # make the psfex models for both portions
+    psf_files = sorted(glob(data_directory + '/*{0}'.format('psfcat_validation_subtracted.psf')))
 
-            atmpsf_tmp[pad_amount:pad_amount_upper,pad_amount:pad_amount_upper] = atmpsf_small
-        elif atm_shape > atmpsf_tmp.shape[0]:
-            # now we have to cut psf for... reasons
-            # TODO: I am 95% certain we don't care if the psf is centered, but let us worry anyways
-            center = int(atm_shape / 2)
-            lower = center - int(atmpsf_tmp.shape[0] / 2)
-            upper = lower + atmpsf_tmp.shape[0]
-            atmpsf_tmp = atmpsf_small[lower:upper, lower:upper]
-        psfex_flipped_list.append(atmpsf_tmp)
+    psfexpsf = load_psfex(psf_files, NObj, meta_hdulist)
 
-    # try to cut out stars
-#     stars.append(hdulist[2].data['VIGNET'][:, 15:47, 15:47])
-    stars.append(hdulist[2].data['VIGNET'][:, 16:48, 16:48])
+    stars = get_vignettes(NObj, meta_hdulist, hdu_idxs)
 
-psfexpsf = np.array(psfex_list)
-psfexflippsf = np.array(psfex_flipped_list)
-stars = np.array(stars)
-stars = np.vstack(stars).astype(np.float64)
+    stars_df = evaluate_stamps_and_combine_with_data(WF, stars, data_df)
+    psfexpsf_df = evaluate_stamps_and_combine_with_data(WF, psfexpsf, data_df)
 
-if sample_num > 0:
-    psfexpsf = psfexpsf[sample_indx]
-    psfexflippsf = psfexflippsf[sample_indx]
-    stars = stars[sample_indx]
+    atmpsf_df = evaluate_stamps_and_combine_with_data(WF, atmpsf, data_df)
+    optpsf_df = evaluate_stamps_and_combine_with_data(WF, optpsf, data_df)
+    starminusopt_df = evaluate_stamps_and_combine_with_data(WF, starminusopt, data_df)
+    model_df = evaluate_stamps_and_combine_with_data(WF, model, data_df)
 
-stars_df = evaluate_stamps_and_combine_with_data(stars, data_df)
-psfexpsf_df = evaluate_stamps_and_combine_with_data(psfexpsf, data_df)
-psfexflippsf_df = evaluate_stamps_and_combine_with_data(psfexflippsf, data_df)
+    combinekeys = ['e0', 'e1', 'e2', 'E1norm', 'E2norm', 'delta1', 'delta2', 'zeta1', 'zeta2']
+    # make a big df with all the above columns combined
+    df = stars_df.copy()
+    names = ['model', 'psfex', 'starminusopt', 'opt', 'atm', 'psfex_flip']
+    df_list = [model_df, psfexpsf_df, starminusopt_df, optpsf_df, atmpsf_df]
 
-atmpsf = np.load(deconvatm_loc)
-optpsf = np.load(deconvopt_loc)
-# set the shape to be right
-starminusopt = np.load(deconvstarsminusopt_loc)[:, 15:47, 15:47]
-model = np.load(deconvmodel_loc)
+    # names += ['opt_load']
+    # df_list += [optpsf_load_df]
 
-if sample_num > 0:
-    atmpsf = atmpsf[sample_indx]
-    optpsf = optpsf[sample_indx]
-    starminusopt = starminusopt[sample_indx]
-    model = model[sample_indx]
+    # names += ['atm_make']
+    # df_list += [atmpsf_make_df]
 
-atmpsf_df = evaluate_stamps_and_combine_with_data(atmpsf, data_df)
-optpsf_df = evaluate_stamps_and_combine_with_data(optpsf, data_df)
-starminusopt_df = evaluate_stamps_and_combine_with_data(starminusopt, data_df)
-model_df = evaluate_stamps_and_combine_with_data(model, data_df)
-
-combinekeys = ['e0', 'e1', 'e2', 'E1norm', 'E2norm', 'delta1', 'delta2', 'zeta1', 'zeta2']
-# make a big df with all the above columns combined
-df = stars_df.copy()
-names = ['model', 'psfex', 'starminusopt', 'opt', 'atm', 'psfex_flip']
-diff_names = ['model', 'psfex']
-df_list = [model_df, psfexpsf_df, starminusopt_df, optpsf_df, atmpsf_df, psfexflippsf_df]
-
-# names += ['opt_load']
-# df_list += [optpsf_load_df]
-
-# names += ['atm_make']
-# df_list += [atmpsf_make_df]
-
-for key in combinekeys:
-    # add the other medsub
-    if key == 'E1norm':
-        df[key] = df['e1'] / df['e0']
-    elif key == 'E2norm':
-        df[key] = df['e2'] / df['e0']
-    df['{0}_medsub'.format(key)] = df[key] - df[key].median()
-    for name, psf in zip(names, df_list):
+    for key in combinekeys:
+        # add the other medsub
         if key == 'E1norm':
-            psf[key] = psf['e1'] / psf['e0']
+            df[key] = df['e1'] / df['e0']
         elif key == 'E2norm':
-            psf[key] = psf['e2'] / psf['e0']
-        df['{0}_{1}'.format(name, key)] = psf[key]
-        # add medsub
-        df['{0}_{1}_medsub'.format(name, key)] = df['{0}_{1}'.format(name, key)] - df['{0}_{1}'.format(name, key)].median()
-        df['{0}_{1}_diff'.format(name, key)] = df['{0}_{1}'.format(name, key)] - df[key]
-        df['{0}_{1}_medsub_diff'.format(name, key)] = df['{0}_{1}_medsub'.format(name, key)] - df['{0}_medsub'.format(key)]
+            df[key] = df['e2'] / df['e0']
+        df['{0}_medsub'.format(key)] = df[key] - df[key].median()
+        for name, psf in zip(names, df_list):
+            if key == 'E1norm':
+                psf[key] = psf['e1'] / psf['e0']
+            elif key == 'E2norm':
+                psf[key] = psf['e2'] / psf['e0']
+            df['{0}_{1}'.format(name, key)] = psf[key]
+            # add medsub
+            df['{0}_{1}_medsub'.format(name, key)] = df['{0}_{1}'.format(name, key)] - df['{0}_{1}'.format(name, key)].median()
+            df['{0}_{1}_diff'.format(name, key)] = df['{0}_{1}'.format(name, key)] - df[key]
+            df['{0}_{1}_medsub_diff'.format(name, key)] = df['{0}_{1}_medsub'.format(name, key)] - df['{0}_medsub'.format(key)]
 
-np.save(out_base + '{0:08d}/{0}_psfexalone.npy'.format(expid), psfexpsf)
-np.save(out_base + '{0:08d}/{0}_data.npy'.format(expid), stars)
+    np.save(output_dir + '{0:08d}/{0}_psfexalone.npy'.format(expid), psfexpsf)
+    np.save(output_dir + '{0:08d}/{0}_data.npy'.format(expid), stars)
 
-df.to_hdf(out_base + '{0:08d}/results.h5'.format(expid),
-          key='table_{0:08d}'.format(expid),
-          mode='a', format='table', append=False)
+    df.to_hdf(output_dir + '{0:08d}/results.h5'.format(expid),
+              key='table_{0:08d}'.format(expid),
+              mode='a', format='table', append=False)
+
+if __name__ == '__main__':
+
+    #TODO verbose tag
+    #TODO delete temp files, use temp files, other options?
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description = desc)
+
+    parser.add_argument('expid', metavar = 'expid', type = int, help =\
+                        'ID of the exposure to analyze')
+    #May want to rename to tmp
+    parser.add_argument('output_dir', metavar = 'output_dir', type = str, help =\
+                        'Directory to store outputs.')
+
+    args = vars(parser.parse_args())
+
+    expid = args['expid']
+    output_dir = args['output_dir']
+
+    #Ensure provided dir exists
+    from os import path, mkdir
+    if not path.isdir(output_dir):
+        raise IOError("The directory %s does not exist."%output_dir)
+
+    if output_dir[-1]  != '/':
+        output_dir+='/'
+
+    #Make new dir to store files from this run
+    if not path.isdir(output_dir+'00%d/'%expid):
+        try:
+            mkdir(output_dir+'00%d/'%expid)
+        except OSError:
+            print 'Failed making directory; using original output directory.'
+        else:
+            output_dir+='00%d/'%expid
+    else:
+        output_dir+='00%d/'%expid
+
+    print 'Starting.'
+
+    #get optical PSF
+    optpsf_stamps, meta_hdulist = get_optical_psf(expid)
+
+    NObj = optpsf_stamps.shape[0]#I'm undecided about hte use of this carrier
+    #For the most part the number of stars is continaed in the other objects I pass around
+    #still, being explicit costs next to nothing and is clear to the user.
+
+    hdu_lengths, hdu_idxs = get_hdu_idxs(meta_hdulist)
+
+    #np.save(output_dir+'%s_opt_test.npy'%expid, optpsf_stamps)
+
+    print 'Opts Calculated.'
+
+    #extract star vignettes from the hdulists
+    vignettes = get_vignettes(NObj, meta_hdulist, hdu_idxs)
+
+    #deconvolve the optical model from the observed stars
+    resid_arr, deconv_successful = deconv_optpsf(NObj, optpsf_stamps, vignettes)
+
+    print 'Deconv done.'
+
+    #now, insert the atmospheric portion back into the hdulists, and write them to disk
+    #PSFEx needs the information in those lists to run correctly.
+
+    resid_fnames = write_resid(output_dir, meta_hdulist, resid_arr, hdu_idxs)
+    #resid_fnames, new_meta_hdulist = write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs)
+    #NObj = deconv_successful.sum() #if making the new HDUlist, the number of objects has changed. Make sure to account.
+
+    print 'Copy and write done.'
+
+    psfex_success = call_psfex(expid, output_dir, resid_fnames)
+
+    #no use continuing if the psfex call failed.
+    #TODO if I write a verbose flag this should print if that is turned off. Cuz the user always needs to know why it exited.
+    if not psfex_success:
+        from sys import exit
+        exit(1)
+
+    psf_files = sorted(glob(output_dir+'*.psf'))
+    atmpsf_arr = load_psfex(psf_files, NObj, meta_hdulist)
+    #atmpsf_arr = load_atmpsf(psf_files, NObj, new_meta_hdulist)
+
+    stars = make_stars(NObj, optpsf_stamps, atmpsf_arr)
+    #stars = make_stars(NObj, optpsf_stamps, atmpsf_arr, deconv_successful)
+
+    #TODO what to save?
+    #TODO saved deconv_succsseful sliced arrays?
+    #Note that these won't al have the same dimensions without a slice by deconv_successful
+    np.save(output_dir+'%s_stars.npy'%expid, stars)
+    np.save(output_dir+'%s_opt.npy'%expid, optpsf_stamps)
+    np.save(output_dir+'%s_atm.npy'%expid, atmpsf_arr)
+    np.save(output_dir+'%d_stars_minus_opt.npy'%expid, resid_arr)
+
+    np.save(output_dir+'%s_deconv_successful.npy', deconv_successful)
+
+    print 'Done'
+
+    optpsf_stamps = optpsf_stamps[deconv_successful]
+    resid_arr = resid_arr[deconv_successful]
