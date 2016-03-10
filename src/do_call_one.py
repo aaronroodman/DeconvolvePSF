@@ -1,5 +1,7 @@
+#@Author Sean McLaughlin
+# Send one exposure to the ki-ls cluster for analysis.
+# TODO Merge this with do_call; it's copied code!
 from __future__ import print_function, division
-import numpy as np
 import pandas as pd
 from subprocess import call
 from os import path
@@ -12,9 +14,9 @@ jamierod_results = pd.read_csv(jamierod_results_path)
 
 # choose a random 40 expids from jamierod results
 
-#out_dir = '/nfs/slac/g/ki/ki18/des/cpd/DeconvOutput'
+# out_dir = '/nfs/slac/g/ki/ki18/des/cpd/DeconvOutput'
 out_dir = '/nfs/slac/g/ki/ki18/des/swmclau2/DeconvOutput'
-#code_path = '/nfs/slac/g/ki/ki18/cpd/Projects/WavefrontPSF/code/DeconvolvePSF/afterburner.py'
+# code_path = '/nfs/slac/g/ki/ki18/cpd/Projects/WavefrontPSF/code/DeconvolvePSF/afterburner.py'
 code_path = '/u/ki/swmclau2/Git/DeconvolvePSF/DeconvolvePSF/afterburner.py'
 
 req_time = 240 # minutes
