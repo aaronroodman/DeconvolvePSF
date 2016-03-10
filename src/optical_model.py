@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#@Author: Chris Davis
+#@Author: Chris Davis, Sean McLaughlin (modifications)
 #NOTE I took this function from ki-ls, and am modifying it to return the models I need.
 
 """
@@ -13,7 +13,6 @@ note: take out z11 in interpolator
 """
 from __future__ import print_function
 import pandas as pd
-import numpy as np
 from os import path, makedirs
 from glob import glob
 from astropy.io import fits

@@ -1,7 +1,6 @@
+#Author: Aaron Roodman
 import numpy as np
-import scipy
 import numpy.lib.index_tricks as itricks
-import pdb
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
 #from scipy.signal import convolve2d as convolve
 
