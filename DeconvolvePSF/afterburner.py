@@ -52,8 +52,7 @@ def get_hdu_idxs(meta_hdulist):
         hdu_lengths[ccd] = hdulist[2].data.shape[0]
 
     hdu_idxs = hdu_lengths.cumsum()
-    np.insert(hdu_idxs, 0, 0)#insert 0 as first elem
-    return hdu_idxs
+    return np.insert(hdu_idxs, 0, 0)#insert 0 as first elem
 
 def get_ccd_idx(idx_1d, hdu_idxs):
     """
@@ -227,7 +226,7 @@ def load_psfex(psf_files, NObj, meta_hdulist):
     :param meta_hdulist: the list of HDULists
     :return: psfex_arr: a (NObj, 32,32) datacube
     """
-    psfex_arr = np.zeros(NObj, 32,32)
+    psfex_arr = np.zeros((NObj, 32,32))
     for idx, (file, hdulist) in enumerate(izip(psf_files, meta_hdulist)):
         pex = PSFEx(file)
         for yimage, ximage in izip(hdulist[2].data['Y_IMAGE'], hdulist[2].data['X_IMAGE']):
@@ -262,7 +261,7 @@ def make_stars(NObj, optpsf_arr, atmpsf_arr, deconv_successful = None):
     slice bad indexs from optpsf_arr
     :return: stars, (nObj, 32,32) array of star psf estimates.
     """
-    stars = np.array(NObj, 32,32)
+    stars = np.zeros((NObj, 32,32))
 
     #Note that atmpsf_arr will already have the bad stars removed if the user is using that scheme.
     if deconv_successful is not None:
@@ -272,9 +271,9 @@ def make_stars(NObj, optpsf_arr, atmpsf_arr, deconv_successful = None):
     for idx, (optpsf, atmpsf) in enumerate(izip(optpsf_arr, atmpsf_arr)):
 
         try:
-            stars[idx] = convolve(optpsf, atmpsf)
+            x= convolve(optpsf, atmpsf)
         except ValueError:
-
+            #TODO since this no longer does anything interesting, the print should be included in the error message
             print 'Convolve failed on object (1D Index) #%d'%(idx)
             raise
 
@@ -459,7 +458,6 @@ if __name__ == '__main__':
 
     #now, insert the atmospheric portion back into the hdulists, and write them to disk
     #PSFEx needs the information in those lists to run correctly.
-
     resid_fnames = write_resid(output_dir, meta_hdulist, resid_arr, hdu_idxs)
     #resid_fnames, new_meta_hdulist = write_resid_new_file(meta_hdulist, resid_arr, deconv_successful, hdu_idxs)
     #NObj = deconv_successful.sum() #if making the new HDUlist, the number of objects has changed. Make sure to account.
@@ -474,6 +472,7 @@ if __name__ == '__main__':
         from sys import exit
         exit(1)
 
+    #It'd be nice if I could get these from call_psfex
     psf_files = sorted(glob(output_dir+'*.psf'))
     atmpsf_arr = load_psfex(psf_files, NObj, meta_hdulist)
     #atmpsf_arr = load_atmpsf(psf_files, NObj, new_meta_hdulist)
