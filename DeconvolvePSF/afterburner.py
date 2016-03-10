@@ -1,24 +1,61 @@
 #!/nfs/slac/g/ki/ki06/roodman/Software/anaconda/bin/python
 #@Author Sean McLaughlin
 desc ='''
-Arguments:
-    - expid: the exposure ID of the exposure to run against
-    - output_dir: the directory in which to create a subdirectory for temporary files and final outputs.
-Requirements:
-    -WavefrontPSF
-    -numpy, pandas, astropy or pyfits
-    -a psfex installation and python binding
-
-This module is the main module for my project for the winter quarter of 2016 in Aaron Roodman's group.
-This is built on top of previous work conducted by Aaron and his graduate student Chris Davis. They have
-developed WavefrontPSF, which estimates the optical contribution of the PSF with a relatively simple model.
-It was found that the optical portion was not as signifcant a fraction of the total PSF as hoped,
-so some sort of afterburner is going to need to be added. This module deconvolves the optical portion of the 
-psf from the observed stars. After the optical portion has been deconvolved
-from the stars (using Richardson-Lucy deconvolution), the remainder is be treated as the "atmospheric"
-portion of the psf. This module load in preprocessed observed stars, run WavefrontPSF on them, deconvolve
-the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.
+Arguments:\n
+    - expid: the exposure ID of the exposure to run against\n
+    - output_dir: the directory in which to create a subdirectory for temporary files and final outputs.\n
+Requirements:\n
+    -WavefrontPSF\n
+    -numpy, pandas, astropy or pyfits\n
+    -a psfex installation and python binding\n
+\n
+This module is the main module for my project for the winter quarter of 2016 in Aaron Roodman's group.\n
+This is built on top of previous work conducted by Aaron and his graduate student Chris Davis. They have\n
+developed WavefrontPSF, which estimates the optical contribution of the PSF with a relatively simple model.\n
+It was found that the optical portion was not as signifcant a fraction of the total PSF as hoped,\n
+so some sort of afterburner is going to need to be added. This module deconvolves the optical portion of the \n
+psf from the observed stars. After the optical portion has been deconvolved\n
+from the stars (using Richardson-Lucy deconvolution), the remainder is be treated as the "atmospheric"\n
+portion of the psf. This module load in preprocessed observed stars, run WavefrontPSF on them, deconvolve\n
+the optical PSF, then run PSFEX (a packaged PSF modeler) on the residual.\n
 '''
+
+if __name__ == '__main__':
+
+    #TODO verbose tag
+    #TODO delete temp files, use temp files, other options?
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description = desc)
+
+    parser.add_argument('expid', metavar = 'expid', type = int, help =\
+                        'ID of the exposure to analyze')
+    #May want to rename to tmp
+    parser.add_argument('output_dir', metavar = 'output_dir', type = str, help =\
+                        'Directory to store outputs.')
+
+    args = vars(parser.parse_args())
+
+    expid = args['expid']
+    output_dir = args['output_dir']
+
+    #Ensure provided dir exists
+    from os import path, mkdir
+    if not path.isdir(output_dir):
+        raise IOError("The directory %s does not exist."%output_dir)
+
+    if output_dir[-1]  != '/':
+        output_dir+='/'
+
+    #Make new dir to store files from this run
+    if not path.isdir(output_dir+'00%d/'%expid):
+        try:
+            mkdir(output_dir+'00%d/'%expid)
+        except OSError:
+            print 'Failed making directory; using original output directory.'
+        else:
+            output_dir+='00%d/'%expid
+    else:
+        output_dir+='00%d/'%expid
 
 #Do imports here instead of before the argparse because users will be able to acces
 #the help script without these packages instalelled, and more quickly
@@ -397,41 +434,6 @@ def make_wavefront(expid, output_dir, optpsf = None, atmpsf = None, starminusopt
               mode='a', format='table', append=False)
 
 if __name__ == '__main__':
-
-    #TODO verbose tag
-    #TODO delete temp files, use temp files, other options?
-    from argparse import ArgumentParser
-    parser = ArgumentParser(description = desc)
-
-    parser.add_argument('expid', metavar = 'expid', type = int, help =\
-                        'ID of the exposure to analyze')
-    #May want to rename to tmp
-    parser.add_argument('output_dir', metavar = 'output_dir', type = str, help =\
-                        'Directory to store outputs.')
-
-    args = vars(parser.parse_args())
-
-    expid = args['expid']
-    output_dir = args['output_dir']
-
-    #Ensure provided dir exists
-    from os import path, mkdir
-    if not path.isdir(output_dir):
-        raise IOError("The directory %s does not exist."%output_dir)
-
-    if output_dir[-1]  != '/':
-        output_dir+='/'
-
-    #Make new dir to store files from this run
-    if not path.isdir(output_dir+'00%d/'%expid):
-        try:
-            mkdir(output_dir+'00%d/'%expid)
-        except OSError:
-            print 'Failed making directory; using original output directory.'
-        else:
-            output_dir+='00%d/'%expid
-    else:
-        output_dir+='00%d/'%expid
 
     print 'Starting.'
 
