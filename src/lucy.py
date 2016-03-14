@@ -1,8 +1,8 @@
+#Author: Aaron Roodman
 import numpy as np
-import scipy
 import numpy.lib.index_tricks as itricks
-import pdb
 from WavefrontPSF.psf_evaluator import Moment_Evaluator
+#from scipy.signal import convolve2d as convolve
 
 def convolve(A, B):
     """ Performs a convolution of two 2D arrays """
@@ -72,7 +72,7 @@ def makeMask(image,sigma,nsigma=3.):
 
 def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,convergence=-1,chi2Level=0.0,extra=False):
     """ Implementation of the Richardson-Lucy deconvolution algorithm.
-    Notation follows Lucy 1974, Eqn 15 and 14.  Add background noise term following 
+    Notation follows Lucy 1974, Eqn 15 and 14.  Add  noise term following
     Snyder et al 1993.
 
     Arguments
@@ -88,37 +88,29 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
     PSF = PSF / np.sum(PSF)
 
     # if no initial guess, make one from 2nd moments of input image - PSF
-    if psi_0 == None:
-        # calculate Moments of psi_tilde and PSF, subtract and
-
-        # calculate moments
-        evaluator = Moment_Evaluator()
-
-        # try a better starting guess - based on our knowledge of the PSF
-        image_moments = evaluator(phi_tilde)
-        PSF_moments = evaluator(PSF)
-
-        # subtract 2nd order moments in quadrature, use an object with the difference
-        Mxx = image_moments['Mxx'][0] - PSF_moments['Mxx'][0]
-        Myy = image_moments['Myy'][0] - PSF_moments['Myy'][0]
-        Mxy = image_moments['Mxy'][0] - PSF_moments['Mxy'][0]
-
-        #print "deconvolve: Mxx,Myy,Mxy",Mxx,Myy,Mxy
-        psi_r = makeGaussian(phi_tilde.shape,Mxx,Myy,Mxy)
+    if psi_0 is None:
+        #Turns out Gaussians are a bad initial guess, still unclear as to why
+        #Can use the image itself as the initial guess, also works fine.
+        psi_r = np.ones(PSF.shape)
         
     else:
         # initial guess
         psi_r = np.abs(psi_0)
 
     # mask starting guess
-    if mask != None:    
+    if mask is not None:
         psi_r = psi_r * mask
 
     # normalize starting guess
     psi_r = psi_r / np.sum(psi_r)
+    
+    #TODO Maybe this should be an error instead of a warning.
+    if np.any(np.isnan(psi_r)):
+        raise RuntimeError("NaN in initial guess, skip this value. ")
+                
 
     # mask image too
-    if mask != None:
+    if mask is not None:
         phi_tilde = phi_tilde * mask
         
     # find normalization for measured image
@@ -135,7 +127,8 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
 
         # calculate next approximation to psi
         phi_r = beta*convolve(psi_r,PSF) + mu0
-        psi_rplus1 = psi_r * convolveStar((phi_tilde+mu0)/phi_r,PSF)
+        #fixing a possible bug in noisy deocnv
+        psi_rplus1 = psi_r * convolveStar(beta*(phi_tilde)/phi_r,PSF)
 
         # mask the next iteration
         if mask != None:
@@ -145,6 +138,7 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         psi_rplus1 = psi_rplus1 / np.sum(psi_rplus1)
 
         # check for convergence if desired
+        #Why are the psiByIter appends inside the convergence test?
         if convergence>0:
             # compare psi_r and psi_rplus1
             psiByIter.append(psi_rplus1)
@@ -152,11 +146,14 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
             diffByIter.append(diff)
             if diff<convergence:
                 continueTheLoop = False
+            elif len(diffByIter) > 2 and diffByIter[-1] > diffByIter[-2] > diffByIter[-3]: #diverging!
+                #raise RuntimeError("Deconvolution Diverged.")
+                pass
 
         # also calculate how close to a solution we are
         chi2 = calcChi2(PSF,psi_rplus1,phi_tilde,beta,mu0)
         chi2ByIter.append(chi2)
-        if chi2<chi2Level:
+        if 0<chi2<chi2Level:
             continueTheLoop = False
         
         # check for Chi2 level
@@ -171,8 +168,25 @@ def deconvolve(PSF,phi_tilde,psi_0=None,mask=None,mu0=0.0,niterations=10,converg
         psi_r = np.array(psi_rplus1)  # does a deepcopy
 
 
+    #TODO rescale deconv by flux
 
     # we are done!
+
+    #check to see if the deconv failed
+    evaluator = Moment_Evaluator()
+
+    resid_moments = evaluator(psi_rplus1)
+
+    #TODO what to do if makeGaussian throws an error?
+    # subtract 2nd order moments in quadrature, use an object with the difference
+    Mxx = resid_moments['Mxx'][0]
+    Myy = resid_moments['Myy'][0]
+    Mxy = resid_moments['Mxy'][0]
+
+    #print Mxx, Myy, Mxy
+    if any(np.isnan(x) for x in [Mxx, Myy, Mxy]):
+        raise RuntimeError("Deconvolution Failed.")
+
     if extra:
         return psi_rplus1,diffByIter,psiByIter,chi2ByIter
     else:
